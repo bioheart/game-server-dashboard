@@ -1,0 +1,16 @@
+[Unit]
+Description=Game Server Web GUI Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/game-dashboard
+ExecStart=/usr/bin/python3 /opt/game-dashboard/server.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

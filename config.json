@@ -1,0 +1,38 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "title": "Game Server Dashboard"
+  },
+  "auth": {
+    "enabled": true,
+    "allowed_users": [
+      "bioheart",
+      "root"
+    ],
+    "session_ttl_hours": 72
+  },
+  "games": [
+    {
+      "id": "necesse",
+      "name": "Necesse",
+      "service": "necesse",
+      "port": 14159,
+      "protocol": "UDP",
+      "category": "game",
+      "description": "Necesse Dedicated Server (bioheart-server)",
+      "icon": "sword"
+    },
+    {
+      "id": "playit",
+      "name": "Playit.gg Tunnel",
+      "service": "playit",
+      "port": null,
+      "protocol": "",
+      "category": "tunnel",
+      "description": "Playit Tunnel Agent for public player connections",
+      "icon": "network",
+      "external_url": "https://playit.gg/account/setup"
+    }
+  ]
+}
