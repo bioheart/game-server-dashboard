@@ -1339,21 +1339,21 @@ function createWolCardHTML(dev) {
 
       <!-- Action Buttons Row -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-        <div class="flex items-center gap-2 w-full sm:w-auto">
+        <div class="grid grid-cols-2 gap-2 sm:gap-2.5 w-full sm:flex sm:items-center sm:w-auto">
           <!-- Main Wake on LAN Button -->
           <button id="btn-wake-action-${dev.id}" onclick="confirmWakeDevice('${dev.id}')"
-            class="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-lg shadow-amber-600/30 hover:shadow-amber-500/40 transition-all cursor-pointer">
-            <svg class="w-4 h-4 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            class="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2.5 min-h-[42px] rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-lg shadow-amber-600/30 hover:shadow-amber-500/40 transition-all cursor-pointer whitespace-nowrap">
+            <svg class="w-4 h-4 text-white animate-pulse shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
             </svg>
-            <span>ปลุกเครื่อง (Wake on LAN)</span>
+            <span>ปลุกเครื่อง<span class="hidden sm:inline"> (WoL)</span></span>
           </button>
 
           <!-- Immediate Ping Check Button -->
           <button id="btn-ping-action-${dev.id}" onclick="pingWolDevice('${ip}', '${dev.id}')"
             title="ส่งคำสั่ง Ping เพื่อตรวจสอบว่าเปิดเครื่องหรือยัง"
-            class="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 active:scale-95 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-medium transition cursor-pointer">
-            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            class="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 min-h-[42px] rounded-xl bg-slate-800/80 hover:bg-slate-700/80 active:scale-95 text-slate-300 hover:text-white border border-slate-700/60 text-xs sm:text-sm font-semibold transition cursor-pointer whitespace-nowrap">
+            <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
             <span>ตรวจจับ Ping</span>
@@ -1415,8 +1415,8 @@ async function wakeWolDevice(deviceId = 'pc') {
     btn.disabled = true;
     btn.classList.add('opacity-75');
     btn.innerHTML = `
-      <svg class="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
-      <span>กำลังส่งสัญญาณ Magic Packet...</span>
+      <svg class="w-4 h-4 animate-spin text-white shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+      <span>กำลังส่งสัญญาณ...</span>
     `;
   }
 
@@ -1479,7 +1479,7 @@ async function pingWolDevice(ip, deviceId = 'pc') {
     btn.disabled = true;
     btn.classList.add('opacity-75');
     btn.innerHTML = `
-      <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+      <svg class="w-4 h-4 animate-spin text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
       <span>Pinging...</span>
     `;
   }
@@ -1506,7 +1506,7 @@ async function pingWolDevice(ip, deviceId = 'pc') {
       btn.disabled = false;
       btn.classList.remove('opacity-75');
       btn.innerHTML = `
-        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
         <span>ตรวจจับ Ping</span>
