@@ -683,21 +683,35 @@ function confirmAction(service, action, gameName) {
   const title = document.getElementById('confirm-title');
   const desc = document.getElementById('confirm-desc');
   const btn = document.getElementById('btn-do-confirm');
+  const iconWrap = document.getElementById('confirm-icon-wrap');
+
+  if (iconWrap) {
+    if (action === 'start') {
+      iconWrap.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+      iconWrap.innerHTML = `<svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
+    } else if (action === 'stop') {
+      iconWrap.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-rose-500/10 text-rose-400 border border-rose-500/20';
+      iconWrap.innerHTML = `<svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/></svg>`;
+    } else {
+      iconWrap.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-amber-500/10 text-amber-400 border border-amber-500/20';
+      iconWrap.innerHTML = `<svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>`;
+    }
+  }
 
   if (action === 'start') {
     title.textContent = `ยืนยันการเปิดเซิร์ฟเวอร์ "${gameName}"`;
     desc.textContent = `ระบบจะส่งคำสั่งเริ่มต้นการทำงานของ "${gameName}" ผ่าน systemctl`;
-    btn.className = 'px-4 py-2 rounded-lg font-medium text-xs text-white transition bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/25';
+    btn.className = 'px-4 py-2 rounded-lg font-medium text-xs text-white transition bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/25 cursor-pointer';
     btn.textContent = 'ยืนยันเปิดเซิร์ฟเวอร์';
   } else if (action === 'stop') {
     title.textContent = `ยืนยันการปิดเซิร์ฟเวอร์ "${gameName}"`;
     desc.textContent = `หากปิดเซิร์ฟเวอร์ ผู้เล่นทุกคนในเกมจะหลุดจากการเชื่อมต่อทันที`;
-    btn.className = 'px-4 py-2 rounded-lg font-medium text-xs text-white transition bg-rose-600 hover:bg-rose-500 shadow-rose-600/25';
+    btn.className = 'px-4 py-2 rounded-lg font-medium text-xs text-white transition bg-rose-600 hover:bg-rose-500 shadow-rose-600/25 cursor-pointer';
     btn.textContent = 'ยืนยันปิดเซิร์ฟเวอร์';
   } else if (action === 'restart') {
     title.textContent = `ยืนยันการรีสตาร์ท "${gameName}"`;
     desc.textContent = `เซิร์ฟเวอร์จะหยุดและเริ่มทำงานใหม่ ผู้เล่นจะหลุดชั่วคราวและใช้เวลา 10-30 วินาที`;
-    btn.className = 'px-4 py-2 rounded-lg font-medium text-xs text-white transition bg-amber-600 hover:bg-amber-500 shadow-amber-600/25';
+    btn.className = 'px-4 py-2 rounded-lg font-medium text-xs text-white transition bg-amber-600 hover:bg-amber-500 shadow-amber-600/25 cursor-pointer';
     btn.textContent = 'ยืนยันรีสตาร์ท';
   }
 
@@ -742,10 +756,16 @@ function confirmDeleteGame(gameId, gameName) {
   const title = document.getElementById('confirm-title');
   const desc = document.getElementById('confirm-desc');
   const btn = document.getElementById('btn-do-confirm');
+  const iconWrap = document.getElementById('confirm-icon-wrap');
+
+  if (iconWrap) {
+    iconWrap.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-rose-500/10 text-rose-400 border border-rose-500/20';
+    iconWrap.innerHTML = `<svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>`;
+  }
 
   title.textContent = `นำ "${gameName}" ออกจาก Dashboard?`;
   desc.textContent = `การนำออกจะไม่ลบไฟล์เกมหรือ service ในเครื่อง เพียงแค่หยุดแสดงผลใน Dashboard เท่านั้น`;
-  btn.className = 'px-4 py-2 rounded-lg font-medium text-xs text-white transition bg-rose-600 hover:bg-rose-500 shadow-rose-600/25';
+  btn.className = 'px-4 py-2 rounded-lg font-medium text-xs text-white transition bg-rose-600 hover:bg-rose-500 shadow-rose-600/25 cursor-pointer';
   btn.textContent = 'นำออกจากหน้าจอ';
 
   btn.onclick = async () => {
@@ -1114,7 +1134,7 @@ function setupWolEventListeners() {
   const quickWolBtn = document.getElementById('btn-quick-wol');
   if (quickWolBtn) {
     quickWolBtn.addEventListener('click', () => {
-      wakeWolDevice('pc');
+      confirmWakeDevice('pc');
     });
   }
 
@@ -1321,7 +1341,7 @@ function createWolCardHTML(dev) {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
         <div class="flex items-center gap-2 w-full sm:w-auto">
           <!-- Main Wake on LAN Button -->
-          <button id="btn-wake-action-${dev.id}" onclick="wakeWolDevice('${dev.id}')"
+          <button id="btn-wake-action-${dev.id}" onclick="confirmWakeDevice('${dev.id}')"
             class="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-lg shadow-amber-600/30 hover:shadow-amber-500/40 transition-all cursor-pointer">
             <svg class="w-4 h-4 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
@@ -1346,6 +1366,46 @@ function createWolCardHTML(dev) {
       </div>
     </div>
   `;
+}
+
+// Confirmation Popup for Wake on LAN to prevent accidental clicks
+function confirmWakeDevice(deviceId = 'pc') {
+  const dev = currentWolDevices.find(d => d.id === deviceId) || {
+    id: 'pc',
+    name: 'PC ของฉัน (Gaming PC)',
+    ip: '192.168.1.163',
+    mac: 'D8-5E-D3-49-AF-47',
+    mac_formatted: 'D8:5E:D3:49:AF:47'
+  };
+
+  const modal = document.getElementById('modal-confirm');
+  const title = document.getElementById('confirm-title');
+  const desc = document.getElementById('confirm-desc');
+  const btn = document.getElementById('btn-do-confirm');
+  const iconWrap = document.getElementById('confirm-icon-wrap');
+
+  if (iconWrap) {
+    iconWrap.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-amber-500/15 text-amber-400 border border-amber-500/30';
+    iconWrap.innerHTML = `
+      <svg class="w-5 h-5 text-amber-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+      </svg>
+    `;
+  }
+
+  title.textContent = `ยืนยันการปลุกเครื่อง "${dev.name}"?`;
+  desc.innerHTML = `ต้องการส่งสัญญาณ <strong>Wake-on-LAN (Magic Packet)</strong> ไปยังเครื่อง <strong>${escapeHtml(dev.ip || '')}</strong> (${escapeHtml(dev.mac_formatted || dev.mac || '')}) เพื่อสั่งเปิดเครื่องคอมพิวเตอร์หรือไม่?`;
+  btn.className = 'px-4 py-2 rounded-lg font-medium text-xs text-white transition bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 shadow-lg shadow-amber-600/30 cursor-pointer active:scale-95';
+  btn.textContent = 'ยืนยันปลุกเครื่อง';
+
+  btn.onclick = () => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    wakeWolDevice(deviceId);
+  };
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
 }
 
 async function wakeWolDevice(deviceId = 'pc') {
