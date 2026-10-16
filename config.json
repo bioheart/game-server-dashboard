@@ -12,6 +12,20 @@
     ],
     "session_ttl_hours": 72
   },
+  "wol": {
+    "enabled": true,
+    "devices": [
+      {
+        "id": "pc",
+        "name": "PC ของฉัน (Gaming PC)",
+        "mac": "D8-5E-D3-49-AF-47",
+        "ip": "192.168.1.163",
+        "broadcast": "192.168.1.255",
+        "port": 9,
+        "description": "Windows Gaming / Main PC"
+      }
+    ]
+  },
   "games": [
     {
       "id": "necesse",

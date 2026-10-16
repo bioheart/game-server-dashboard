@@ -10,6 +10,8 @@ let pollTimer = null;
 let pollIntervalMs = 4000;
 let activeLogService = null;
 let logPollTimer = null;
+let currentWolDevices = [];
+let wakingDevices = {};
 
 // Icons dictionary
 const ICONS = {
@@ -23,6 +25,7 @@ const ICONS = {
 document.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
   setupAuthEventListeners();
+  setupWolEventListeners();
   checkAuth();
 });
 
@@ -342,6 +345,12 @@ async function fetchStatus() {
     // Update Games list
     currentGamesData = data.games || [];
     renderGames(currentGamesData);
+
+    // Update Wake-on-LAN Devices
+    if (data.wol) {
+      currentWolDevices = data.wol;
+      renderWolDevices(currentWolDevices);
+    }
 
   } catch (err) {
     console.error('Failed to fetch status:', err);
@@ -1090,3 +1099,388 @@ function renderPingBadge(ping, showLabel = false) {
     <span>${showLabel ? 'Edge: ' : ''}${ping.ms} ms</span>
   </span>`;
 }
+
+// ==============================================================================
+// Wake-on-LAN (WOL) Management Functions
+// ==============================================================================
+
+function setupWolEventListeners() {
+  // Quick WOL header button
+  const quickWolBtn = document.getElementById('btn-quick-wol');
+  if (quickWolBtn) {
+    quickWolBtn.addEventListener('click', () => {
+      wakeWolDevice('pc');
+    });
+  }
+
+  // Close WOL edit modal
+  const closeWolBtn = document.getElementById('btn-close-wol-modal');
+  if (closeWolBtn) closeWolBtn.addEventListener('click', closeWolEditModal);
+
+  const cancelWolBtn = document.getElementById('btn-cancel-wol-edit');
+  if (cancelWolBtn) cancelWolBtn.addEventListener('click', closeWolEditModal);
+
+  // Submit WOL edit modal form
+  const formWol = document.getElementById('form-wol-edit');
+  if (formWol) {
+    formWol.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const devId = document.getElementById('wol-edit-id').value;
+      const name = document.getElementById('wol-edit-name').value.trim();
+      const mac = document.getElementById('wol-edit-mac').value.trim();
+      const ip = document.getElementById('wol-edit-ip').value.trim();
+      const broadcast = document.getElementById('wol-edit-broadcast').value.trim();
+      const port = document.getElementById('wol-edit-port').value.trim();
+      const desc = document.getElementById('wol-edit-desc').value.trim();
+
+      try {
+        const res = await fetch('/api/wol/edit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: devId,
+            name,
+            mac,
+            ip,
+            broadcast,
+            port: port ? parseInt(port) : 9,
+            description: desc
+          })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast('บันทึกการตั้งค่า Wake-on-LAN สำเร็จ', 'success');
+          closeWolEditModal();
+          if (data.devices) {
+            currentWolDevices = data.devices;
+            renderWolDevices(currentWolDevices);
+          } else {
+            fetchStatus();
+          }
+        } else {
+          showToast(data.error || 'ไม่สามารถบันทึกข้อมูลได้', 'error');
+        }
+      } catch (err) {
+        showToast('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', 'error');
+      }
+    });
+  }
+}
+
+function renderWolDevices(devices) {
+  const container = document.getElementById('wol-devices-container');
+  if (!container) return;
+
+  if (!devices || devices.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  // Check if any waking device has turned online
+  devices.forEach(dev => {
+    if (wakingDevices[dev.id]) {
+      if (dev.is_online) {
+        delete wakingDevices[dev.id];
+        showToast(`🎉 เครื่อง ${dev.name} ออนไลน์แล้ว! (${dev.ip} ตอบสนองใน ${dev.ping?.ms || '0'} ms)`, 'success');
+      } else if (Date.now() - wakingDevices[dev.id] > 60000) {
+        delete wakingDevices[dev.id];
+      }
+    }
+  });
+
+  container.innerHTML = devices.map(dev => createWolCardHTML(dev)).join('');
+}
+
+function createWolCardHTML(dev) {
+  const isOnline = dev.is_online;
+  const isWaking = !!wakingDevices[dev.id];
+  const formattedMac = dev.mac_formatted || dev.mac;
+  const ip = dev.ip || '-';
+  const broadcast = `${dev.broadcast || '192.168.1.255'}:${dev.port || 9}`;
+  const pingMs = (dev.ping && dev.ping.ms !== null) ? `${dev.ping.ms} ms` : null;
+
+  let statusBadgeHtml = '';
+  let cardBorder = 'border-slate-800';
+  let iconGlowBg = 'bg-slate-800/80 text-slate-400 border-slate-700/60';
+  let powerIconClass = 'text-slate-400';
+
+  if (isOnline) {
+    statusBadgeHtml = `
+      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-emerald"></span>
+        <span>Online (เปิดอยู่)</span>
+      </span>
+    `;
+    cardBorder = 'border-emerald-500/30';
+    iconGlowBg = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+    powerIconClass = 'text-emerald-400';
+  } else if (isWaking) {
+    statusBadgeHtml = `
+      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+        <span class="w-2 h-2 rounded-full bg-amber-400 pulse-amber"></span>
+        <span>กำลังส่งสัญญาณ / รอเครื่องบูต...</span>
+      </span>
+    `;
+    cardBorder = 'border-amber-500/35';
+    iconGlowBg = 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+    powerIconClass = 'text-amber-400';
+  } else {
+    statusBadgeHtml = `
+      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-800/90 text-slate-400 border border-slate-700/60">
+        <span class="w-2 h-2 rounded-full bg-slate-500"></span>
+        <span>Offline (เครื่องปิด/สลีปอยู่)</span>
+      </span>
+    `;
+  }
+
+  return `
+    <div class="bg-gradient-to-r from-slate-900/95 via-slate-900/80 to-slate-900/95 ${cardBorder} rounded-2xl p-4 sm:p-5 shadow-xl backdrop-blur-md wol-card relative overflow-hidden transition-all duration-300">
+      <!-- Glow ambient background -->
+      <div class="absolute -top-16 -right-16 w-44 h-44 ${isOnline ? 'bg-emerald-500/10' : 'bg-amber-500/10'} rounded-full blur-3xl pointer-events-none"></div>
+
+      <!-- Top Row: Icon, Title, Status & Settings -->
+      <div class="flex flex-wrap items-center justify-between gap-3 relative mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-11 h-11 rounded-xl ${iconGlowBg} border flex items-center justify-center shadow-lg transition-transform duration-300">
+            <!-- Computer Monitor / Tower Icon -->
+            <svg class="w-6 h-6 ${powerIconClass}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-bold text-base text-white tracking-tight">${escapeHtml(dev.name || 'PC')}</h3>
+              <span class="text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20">Wake-on-LAN</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-0.5">${escapeHtml(dev.description || 'เครื่องคอมพิวเตอร์หลัก (Local Network)')}</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          ${statusBadgeHtml}
+          <!-- Edit device config button -->
+          <button onclick="openWolEditModal('${dev.id}')" title="ตั้งค่าอุปกรณ์ PC" class="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700/60 transition cursor-pointer">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Info Details Grid -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 bg-slate-950/60 rounded-xl p-3 border border-slate-800/80 text-xs mb-4">
+        <!-- IP Address -->
+        <div>
+          <span class="text-[11px] text-slate-500 block mb-0.5">IP Address</span>
+          <div class="flex items-center gap-1.5">
+            <span class="font-mono text-slate-200 font-semibold">${escapeHtml(ip)}</span>
+            <button onclick="copyToClipboard('${ip}', this, 'คัดลอก IP สำเร็จ')" title="Copy IP" class="text-slate-500 hover:text-slate-300 transition cursor-pointer">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- MAC Address -->
+        <div>
+          <span class="text-[11px] text-slate-500 block mb-0.5">MAC Address</span>
+          <div class="flex items-center gap-1.5">
+            <span class="font-mono text-indigo-400 font-semibold">${escapeHtml(formattedMac)}</span>
+            <button onclick="copyToClipboard('${formattedMac}', this, 'คัดลอก MAC สำเร็จ')" title="Copy MAC" class="text-slate-500 hover:text-slate-300 transition cursor-pointer">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Ping Latency -->
+        <div>
+          <span class="text-[11px] text-slate-500 block mb-0.5">สถานะการเชื่อมต่อ (Ping)</span>
+          <div>
+            ${isOnline && pingMs ? `
+              <span class="font-mono font-bold text-emerald-400">${pingMs}</span>
+            ` : `
+              <span class="font-mono text-slate-500">Unreachable (เครื่องปิด)</span>
+            `}
+          </div>
+        </div>
+
+        <!-- Broadcast Destination -->
+        <div>
+          <span class="text-[11px] text-slate-500 block mb-0.5">Broadcast Subnet</span>
+          <span class="font-mono text-slate-400">${escapeHtml(broadcast)}</span>
+        </div>
+      </div>
+
+      <!-- Action Buttons Row -->
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+        <div class="flex items-center gap-2">
+          <!-- Main Wake on LAN Button -->
+          <button id="btn-wake-action-${dev.id}" onclick="wakeWolDevice('${dev.id}')"
+            class="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-lg shadow-amber-600/30 hover:shadow-amber-500/40 transition-all cursor-pointer">
+            <svg class="w-4 h-4 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+            <span>ปลุกเครื่อง (Wake on LAN)</span>
+          </button>
+
+          <!-- Immediate Ping Check Button -->
+          <button id="btn-ping-action-${dev.id}" onclick="pingWolDevice('${ip}', '${dev.id}')"
+            title="ส่งคำสั่ง Ping เพื่อตรวจสอบว่าเปิดเครื่องหรือยัง"
+            class="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 active:scale-95 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-medium transition cursor-pointer">
+            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>ตรวจจับ Ping</span>
+          </button>
+        </div>
+
+        <div class="text-[11px] text-slate-500 flex items-center gap-1 font-mono">
+          <span>⚡ Magic Packet (UDP Broadcast Port 9 & 7)</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function wakeWolDevice(deviceId = 'pc') {
+  const btn = document.getElementById(`btn-wake-action-${deviceId}`) || document.getElementById('btn-quick-wol');
+  const originalHtml = btn ? btn.innerHTML : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('opacity-75');
+    btn.innerHTML = `
+      <svg class="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+      <span>กำลังส่งสัญญาณ Magic Packet...</span>
+    `;
+  }
+
+  try {
+    const res = await fetch('/api/wol/wake', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: deviceId })
+    });
+
+    if (res.status === 401) {
+      showLoginView();
+      showToast('กรุณาเข้าสู่ระบบก่อนดำเนินการ', 'warning');
+      return;
+    }
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      wakingDevices[deviceId] = Date.now();
+      showToast(data.message || 'ส่งสัญญาณ Wake-on-LAN เรียบร้อยแล้ว!', 'success');
+
+      // Scroll smoothly to wol-section if not visible
+      const wolSection = document.getElementById('wol-section');
+      if (wolSection && btn === document.getElementById('btn-quick-wol')) {
+        wolSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+
+      // Re-render immediately to reflect waking status
+      renderWolDevices(currentWolDevices);
+
+      // Trigger high-frequency polling for the next 35 seconds to catch when PC is online
+      let checkCount = 0;
+      const wakeInterval = setInterval(async () => {
+        checkCount++;
+        if (checkCount > 15 || (currentWolDevices.find(d => d.id === deviceId)?.is_online)) {
+          clearInterval(wakeInterval);
+          return;
+        }
+        await fetchStatus();
+      }, 2500);
+
+    } else {
+      showToast(data.error || 'ไม่สามารถส่งสัญญาณ Wake-on-LAN ได้', 'error');
+    }
+  } catch (err) {
+    console.error('Error waking device:', err);
+    showToast('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', 'error');
+  } finally {
+    if (btn && originalHtml) {
+      btn.disabled = false;
+      btn.classList.remove('opacity-75');
+      btn.innerHTML = originalHtml;
+    }
+  }
+}
+
+async function pingWolDevice(ip, deviceId = 'pc') {
+  const btn = document.getElementById(`btn-ping-action-${deviceId}`);
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('opacity-75');
+    btn.innerHTML = `
+      <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+      <span>Pinging...</span>
+    `;
+  }
+
+  try {
+    const res = await fetch('/api/wol/ping', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (data.is_online) {
+        showToast(`เครื่อง ${ip} ตอบสนองแล้ว! (Ping: ${data.ms} ms)`, 'success');
+      } else {
+        showToast(`เครื่อง ${ip} ยังไม่ตอบสนอง (Offline)`, 'info');
+      }
+      fetchStatus();
+    }
+  } catch (err) {
+    showToast('เกิดข้อผิดพลาดในการ Ping', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('opacity-75');
+      btn.innerHTML = `
+        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <span>ตรวจจับ Ping</span>
+      `;
+    }
+  }
+}
+
+function openWolEditModal(deviceId = 'pc') {
+  const dev = currentWolDevices.find(d => d.id === deviceId) || {
+    id: 'pc',
+    name: 'PC ของฉัน (Gaming PC)',
+    mac: 'D8-5E-D3-49-AF-47',
+    ip: '192.168.1.163',
+    broadcast: '192.168.1.255',
+    port: 9,
+    description: 'Windows Gaming / Main PC'
+  };
+
+  document.getElementById('wol-edit-id').value = dev.id || 'pc';
+  document.getElementById('wol-edit-name').value = dev.name || 'PC ของฉัน (Gaming PC)';
+  document.getElementById('wol-edit-mac').value = dev.mac || 'D8-5E-D3-49-AF-47';
+  document.getElementById('wol-edit-ip').value = dev.ip || '192.168.1.163';
+  document.getElementById('wol-edit-broadcast').value = dev.broadcast || '192.168.1.255';
+  document.getElementById('wol-edit-port').value = dev.port || 9;
+  document.getElementById('wol-edit-desc').value = dev.description || 'Windows Gaming / Main PC';
+
+  const modal = document.getElementById('modal-wol-edit');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+}
+
+function closeWolEditModal() {
+  const modal = document.getElementById('modal-wol-edit');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+}
+

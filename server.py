@@ -133,6 +133,20 @@ DEFAULT_CONFIG = {
         "allowed_users": ["bioheart", "root"],
         "session_ttl_hours": 72
     },
+    "wol": {
+        "enabled": True,
+        "devices": [
+            {
+                "id": "pc",
+                "name": "PC ของฉัน (Gaming PC)",
+                "mac": "D8-5E-D3-49-AF-47",
+                "ip": "192.168.1.163",
+                "broadcast": "192.168.1.255",
+                "port": 9,
+                "description": "Windows Gaming / Main PC"
+            }
+        ]
+    },
     "games": [
         {
             "id": "necesse",
@@ -472,6 +486,106 @@ def _ping_monitor_loop():
             pass
         time.sleep(12)
 
+# ==============================================================================
+# Wake-on-LAN (WOL) Management
+# ==============================================================================
+
+def format_mac(mac):
+    """Normalize MAC address into standard AA:BB:CC:DD:EE:FF format"""
+    cleaned = re.sub(r"[^0-9a-fA-F]", "", str(mac))
+    if len(cleaned) == 12:
+        return ":".join(cleaned[i:i+2] for i in range(0, 12, 2)).upper()
+    return str(mac).upper()
+
+def send_wol_magic_packet(mac_address, broadcast_ip="192.168.1.255", port=9):
+    """
+    Send Wake-on-LAN magic packet to target MAC address via UDP broadcast.
+    Magic packet structure: 6 bytes of 0xFF followed by MAC address repeated 16 times (102 bytes total).
+    Sends multiple UDP packets across target broadcast subnet and global broadcast (ports 9 & 7).
+    """
+    cleaned_mac = re.sub(r"[^0-9a-fA-F]", "", str(mac_address))
+    if len(cleaned_mac) != 12:
+        raise ValueError(f"รูปแบบ MAC Address ไม่ถูกต้อง: '{mac_address}' (ต้องเป็นเลขฐาน 16 จำนวน 12 หลัก)")
+
+    mac_bytes = bytes.fromhex(cleaned_mac)
+    magic_packet = b"\xff" * 6 + mac_bytes * 16
+
+    destinations = []
+    # 1. Target Subnet broadcast (e.g., 192.168.1.255)
+    if broadcast_ip:
+        destinations.append((broadcast_ip, port))
+        destinations.append((broadcast_ip, 7 if port == 9 else 9))
+    # 2. Global broadcast fallback
+    destinations.append(("255.255.255.255", port))
+    destinations.append(("255.255.255.255", 7 if port == 9 else 9))
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    try:
+        # Transmit 3 burst packets with 50ms interval to ensure arrival
+        for _ in range(3):
+            for dest_ip, dest_port in destinations:
+                try:
+                    sock.sendto(magic_packet, (dest_ip, dest_port))
+                except Exception:
+                    pass
+            time.sleep(0.05)
+    finally:
+        sock.close()
+    return True
+
+def _delayed_ping_check(ip):
+    """Periodically ping target IP after WOL to detect when the PC finishes booting"""
+    if not ip:
+        return
+    for interval in [4, 4, 5, 5, 6, 8, 10]:
+        time.sleep(interval)
+        ms = measure_host_ping(ip)
+        with _ping_lock:
+            if ms is not None:
+                status = "good" if ms < 60 else ("fair" if ms < 130 else "high")
+                _ping_cache[ip] = {"ms": ms, "status": status, "updated": time.time()}
+                break
+            else:
+                _ping_cache[ip] = {"ms": None, "status": "offline", "updated": time.time()}
+
+def get_wol_devices():
+    """Retrieve list of configured Wake-on-LAN devices with real-time ping status"""
+    cfg = load_config()
+    wol_cfg = cfg.get("wol", {})
+    devices = wol_cfg.get("devices", [])
+
+    if not devices:
+        devices = [
+            {
+                "id": "pc",
+                "name": "PC ของฉัน (Gaming PC)",
+                "mac": "D8-5E-D3-49-AF-47",
+                "ip": "192.168.1.163",
+                "broadcast": "192.168.1.255",
+                "port": 9,
+                "description": "Windows Gaming / Main PC"
+            }
+        ]
+
+    result = []
+    for dev in devices:
+        ip = dev.get("ip")
+        ping_info = None
+        is_online = False
+        if ip:
+            ping_info = get_cached_ping(ip)
+            if ping_info and ping_info.get("status") in ("good", "fair", "high"):
+                is_online = True
+
+        result.append({
+            **dev,
+            "mac_formatted": format_mac(dev.get("mac", "")),
+            "is_online": is_online,
+            "ping": ping_info
+        })
+    return result
+
 def get_playit_details():
     """Query playitd IPC socket for live tunnel, address, and latency information"""
     sock_path = "/run/playit/playitd.sock"
@@ -715,6 +829,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "title": cfg.get("server", {}).get("title", "Game Server Dashboard"),
                 "games": games_status,
                 "playit": playit_info,
+                "wol": get_wol_devices(),
                 "timestamp": int(time.time())
             })
             return
@@ -770,6 +885,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             except Exception:
                 pass
             self.send_json({"candidates": sorted(list(set(candidates)))})
+            return
+
+        elif path == "/api/wol/devices":
+            self.send_json({"devices": get_wol_devices()})
             return
 
         elif path == "/" or path == "":
@@ -1005,6 +1124,133 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json({"success": True})
             else:
                 self.send_json({"error": "Failed to delete game"}, 500)
+            return
+
+        elif path == "/api/wol/wake":
+            device_id = payload.get("id", "").strip()
+            cfg = load_config()
+            wol_devices = cfg.get("wol", {}).get("devices", [])
+
+            target = None
+            if device_id:
+                for d in wol_devices:
+                    if d.get("id") == device_id:
+                        target = d
+                        break
+
+            # Fallback if device not found by ID: use first configured device or payload params
+            mac = payload.get("mac") or (target.get("mac") if target else None)
+            ip = payload.get("ip") or (target.get("ip") if target else None)
+            broadcast = payload.get("broadcast") or (target.get("broadcast") if target else "192.168.1.255")
+            port = int(payload.get("port") or (target.get("port") if target else 9))
+            name = (target.get("name") if target else None) or payload.get("name") or "PC"
+
+            if not mac:
+                if wol_devices:
+                    target = wol_devices[0]
+                    mac = target.get("mac")
+                    ip = target.get("ip")
+                    broadcast = target.get("broadcast", "192.168.1.255")
+                    name = target.get("name", "PC")
+                else:
+                    mac = "D8-5E-D3-49-AF-47"
+                    ip = "192.168.1.163"
+                    broadcast = "192.168.1.255"
+
+            try:
+                send_wol_magic_packet(mac, broadcast_ip=broadcast, port=port)
+                formatted_mac = format_mac(mac)
+
+                # Register host for ping checks and start delayed boot monitor
+                if ip:
+                    register_ping_host(ip)
+                    threading.Thread(target=_delayed_ping_check, args=(ip,), daemon=True).start()
+
+                self.send_json({
+                    "success": True,
+                    "message": f"ส่งสัญญาณ Wake-on-LAN ไปยัง {name} ({formatted_mac}) เรียบร้อยแล้ว",
+                    "mac": formatted_mac,
+                    "ip": ip,
+                    "timestamp": time.time()
+                })
+            except Exception as e:
+                self.send_json({"error": str(e)}, 400)
+            return
+
+        elif path == "/api/wol/ping":
+            ip = payload.get("ip", "").strip()
+            if not ip:
+                devices = get_wol_devices()
+                if devices:
+                    ip = devices[0].get("ip", "")
+
+            if not ip:
+                self.send_json({"error": "IP address required"}, 400)
+                return
+
+            ms = measure_host_ping(ip)
+            with _ping_lock:
+                if ms is not None:
+                    status = "good" if ms < 60 else ("fair" if ms < 130 else "high")
+                    _ping_cache[ip] = {"ms": ms, "status": status, "updated": time.time()}
+                else:
+                    _ping_cache[ip] = {"ms": None, "status": "offline", "updated": time.time()}
+
+            self.send_json({
+                "ip": ip,
+                "ms": ms,
+                "is_online": (ms is not None),
+                "status": _ping_cache[ip]["status"]
+            })
+            return
+
+        elif path == "/api/wol/edit":
+            cfg = load_config()
+            wol_cfg = cfg.setdefault("wol", {"enabled": True, "devices": []})
+            devices = wol_cfg.setdefault("devices", [])
+
+            dev_id = payload.get("id", "pc").strip()
+            name = payload.get("name", "").strip()
+            mac = payload.get("mac", "").strip()
+            ip = payload.get("ip", "").strip()
+            broadcast = payload.get("broadcast", "192.168.1.255").strip()
+            port = payload.get("port", 9)
+            description = payload.get("description", "").strip()
+
+            if mac:
+                cleaned_mac = re.sub(r"[^0-9a-fA-F]", "", mac)
+                if len(cleaned_mac) != 12:
+                    self.send_json({"error": "MAC Address ไม่ถูกต้อง (ต้องเป็นเลขฐาน 16 จำนวน 12 หลัก)"}, 400)
+                    return
+                mac = format_mac(cleaned_mac)
+
+            found = False
+            for dev in devices:
+                if dev.get("id") == dev_id:
+                    if name: dev["name"] = name
+                    if mac: dev["mac"] = mac
+                    if ip: dev["ip"] = ip
+                    if broadcast: dev["broadcast"] = broadcast
+                    if port: dev["port"] = int(port)
+                    if description is not None: dev["description"] = description
+                    found = True
+                    break
+
+            if not found:
+                devices.append({
+                    "id": dev_id,
+                    "name": name or "PC ของฉัน (Gaming PC)",
+                    "mac": mac or "D8-5E-D3-49-AF-47",
+                    "ip": ip or "192.168.1.163",
+                    "broadcast": broadcast or "192.168.1.255",
+                    "port": int(port) if port else 9,
+                    "description": description or "Windows Gaming / Main PC"
+                })
+
+            if save_config(cfg):
+                self.send_json({"success": True, "devices": get_wol_devices()})
+            else:
+                self.send_json({"error": "Failed to save configuration"}, 500)
             return
 
         self.send_json({"error": "Endpoint not found"}, 404)

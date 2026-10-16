@@ -13,6 +13,7 @@
 * **Real-time Server Metrics**: มอนิเตอร์ CPU, RAM, Disk, และ Uptime ของเครื่องแม่ข่าย
 * **Game Players Detection**: ตรวจจับจำนวนผู้เล่นออนไลน์และรายชื่อผู้เล่นจาก Server Log (รองรับ Necesse และสามารถขยายเพิ่มได้)
 * **Real-time Log Viewer**: ดูบันทึกการทำงานสดผ่าน `journalctl` พร้อมระบบ Auto-scroll และคัดลอก Logs
+* **Wake-on-LAN Controller**: ปลุกเครื่อง PC จากระยะไกลผ่านเครือข่าย Local LAN ด้วย Magic Packet (UDP Broadcast) พร้อมระบบตรวจสอบสถานะเครื่อง (Ping Tracking) แบบ Real-time
 * **Modern UI**: ออกแบบด้วย Tailwind CSS (CDN) รองรับ Dark Mode, Responsive Design บนมือถือและแท็บเล็ต
 
 ---
@@ -107,6 +108,9 @@ graph TD
 | `POST` | `/api/games/add` | เพิ่มการ์ดเกมใหม่เข้าสู่ระบบ *(ต้องล็อกอิน)* | `{"name": "...", "service": "...", "port": 1234, ...}` |
 | `POST` | `/api/games/edit` | แก้ไขข้อมูลการ์ดเกมที่มีอยู่ *(ต้องล็อกอิน)* | `{"id": "...", "name": "...", ...}` |
 | `POST` | `/api/games/delete` | ลบเกมออกจาก Dashboard *(ต้องล็อกอิน)* | `{"id": "..."}` |
+| `POST` | `/api/wol/wake` | ส่งสัญญาณ Magic Packet ปลุกเครื่อง PC ผ่าน UDP Broadcast *(ต้องล็อกอิน)* | `{"id": "pc"}` หรือ `{"mac": "..."}` |
+| `POST` | `/api/wol/ping` | สั่ง Ping ตรวจสอบสถานะการเชื่อมต่อของ PC ทันที *(ต้องล็อกอิน)* | `{"ip": "192.168.1.163"}` |
+| `POST` | `/api/wol/edit` | ตั้งค่า/แก้ไขข้อมูลอุปกรณ์ Wake-on-LAN *(ต้องล็อกอิน)* | `{"id": "pc", "mac": "...", "ip": "..."}` |
 
 ---
 
