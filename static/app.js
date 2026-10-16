@@ -94,17 +94,20 @@ function setupAuthEventListeners() {
     });
   }
 
-  // Logout button
+  // Logout button (Desktop & Mobile)
+  const logoutHandler = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (err) {}
+    showToast('ออกจากระบบเรียบร้อยแล้ว', 'info');
+    showLoginView();
+  };
+
   const btnLogout = document.getElementById('btn-logout');
-  if (btnLogout) {
-    btnLogout.addEventListener('click', async () => {
-      try {
-        await fetch('/api/auth/logout', { method: 'POST' });
-      } catch (err) {}
-      showToast('ออกจากระบบเรียบร้อยแล้ว', 'info');
-      showLoginView();
-    });
-  }
+  if (btnLogout) btnLogout.addEventListener('click', logoutHandler);
+
+  const btnLogoutMobile = document.getElementById('btn-logout-mobile');
+  if (btnLogoutMobile) btnLogoutMobile.addEventListener('click', logoutHandler);
 }
 
 async function checkAuth() {
@@ -127,6 +130,7 @@ function showDashboard(username) {
   const loginView = document.getElementById('login-view');
   const dashboardView = document.getElementById('dashboard-view');
   const userElem = document.getElementById('auth-username');
+  const userElemMobile = document.getElementById('auth-username-mobile');
 
   if (loginView) {
     loginView.classList.add('hidden');
@@ -135,8 +139,9 @@ function showDashboard(username) {
   if (dashboardView) {
     dashboardView.classList.remove('hidden');
   }
-  if (userElem && username) {
-    userElem.textContent = username;
+  if (username) {
+    if (userElem) userElem.textContent = username;
+    if (userElemMobile) userElemMobile.textContent = username;
   }
   fetchStatus();
   startPolling();
@@ -1240,27 +1245,27 @@ function createWolCardHTML(dev) {
       <div class="absolute -top-16 -right-16 w-44 h-44 ${isOnline ? 'bg-emerald-500/10' : 'bg-amber-500/10'} rounded-full blur-3xl pointer-events-none"></div>
 
       <!-- Top Row: Icon, Title, Status & Settings -->
-      <div class="flex flex-wrap items-center justify-between gap-3 relative mb-4">
-        <div class="flex items-center gap-3">
-          <div class="w-11 h-11 rounded-xl ${iconGlowBg} border flex items-center justify-center shadow-lg transition-transform duration-300">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative mb-4">
+        <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl ${iconGlowBg} border flex items-center justify-center shadow-lg transition-transform duration-300 shrink-0">
             <!-- Computer Monitor / Tower Icon -->
-            <svg class="w-6 h-6 ${powerIconClass}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5 sm:w-6 sm:h-6 ${powerIconClass}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
             </svg>
           </div>
-          <div>
-            <div class="flex items-center gap-2">
-              <h3 class="font-bold text-base text-white tracking-tight">${escapeHtml(dev.name || 'PC')}</h3>
-              <span class="text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20">Wake-on-LAN</span>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <h3 class="font-bold text-sm sm:text-base text-white tracking-tight truncate">${escapeHtml(dev.name || 'PC')}</h3>
+              <span class="text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20 shrink-0">Wake-on-LAN</span>
             </div>
-            <p class="text-xs text-slate-400 mt-0.5">${escapeHtml(dev.description || 'เครื่องคอมพิวเตอร์หลัก (Local Network)')}</p>
+            <p class="text-[11px] sm:text-xs text-slate-400 mt-0.5 truncate">${escapeHtml(dev.description || 'เครื่องคอมพิวเตอร์หลัก (Local Network)')}</p>
           </div>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto pt-2 sm:pt-0 border-t border-slate-800/60 sm:border-t-0">
           ${statusBadgeHtml}
           <!-- Edit device config button -->
-          <button onclick="openWolEditModal('${dev.id}')" title="ตั้งค่าอุปกรณ์ PC" class="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700/60 transition cursor-pointer">
+          <button onclick="openWolEditModal('${dev.id}')" title="ตั้งค่าอุปกรณ์ PC" class="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700/60 transition cursor-pointer shrink-0">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -1313,11 +1318,11 @@ function createWolCardHTML(dev) {
       </div>
 
       <!-- Action Buttons Row -->
-      <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
-        <div class="flex items-center gap-2">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+        <div class="flex items-center gap-2 w-full sm:w-auto">
           <!-- Main Wake on LAN Button -->
           <button id="btn-wake-action-${dev.id}" onclick="wakeWolDevice('${dev.id}')"
-            class="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-lg shadow-amber-600/30 hover:shadow-amber-500/40 transition-all cursor-pointer">
+            class="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-lg shadow-amber-600/30 hover:shadow-amber-500/40 transition-all cursor-pointer">
             <svg class="w-4 h-4 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
             </svg>
@@ -1327,7 +1332,7 @@ function createWolCardHTML(dev) {
           <!-- Immediate Ping Check Button -->
           <button id="btn-ping-action-${dev.id}" onclick="pingWolDevice('${ip}', '${dev.id}')"
             title="ส่งคำสั่ง Ping เพื่อตรวจสอบว่าเปิดเครื่องหรือยัง"
-            class="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 active:scale-95 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-medium transition cursor-pointer">
+            class="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 active:scale-95 text-slate-300 hover:text-white border border-slate-700/60 text-xs font-medium transition cursor-pointer">
             <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
