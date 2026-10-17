@@ -26,6 +26,18 @@
       }
     ]
   },
+  "notification": {
+    "enabled": true,
+    "email": {
+      "recipient": "bioheart.kalel@gmail.com",
+      "smtp_host": "smtp.gmail.com",
+      "smtp_port": 587,
+      "use_tls": true,
+      "sender_email": "bioheart.kalel@gmail.com",
+      "sender_password": "",
+      "sender_name": "Game Server Security Alert"
+    }
+  },
   "games": [
     {
       "id": "necesse",

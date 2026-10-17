@@ -26,8 +26,48 @@ document.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
   setupAuthEventListeners();
   setupWolEventListeners();
+  setupSecurityEventListeners();
   checkAuth();
 });
+
+// Device Identification Helpers
+function getOrCreateDeviceId() {
+  let id = localStorage.getItem('dashboard_device_id');
+  if (!id) {
+    id = 'dev_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+    localStorage.setItem('dashboard_device_id', id);
+  }
+  return id;
+}
+
+function getClientDeviceInfo() {
+  const ua = navigator.userAgent || '';
+  let os = 'Unknown OS';
+  if (/Windows NT 10.0|Windows NT 11.0/i.test(ua)) os = 'Windows 10/11';
+  else if (/Windows NT/i.test(ua)) os = 'Windows';
+  else if (/iPhone/i.test(ua)) os = 'iPhone (iOS)';
+  else if (/iPad/i.test(ua)) os = 'iPad (iPadOS)';
+  else if (/Android/i.test(ua)) os = 'Android';
+  else if (/Macintosh|Mac OS X/i.test(ua)) os = 'macOS';
+  else if (/Linux/i.test(ua)) os = 'Linux';
+
+  let browser = 'Browser';
+  if (/Edg\//i.test(ua)) browser = 'Microsoft Edge';
+  else if (/Chrome\//i.test(ua)) browser = 'Google Chrome';
+  else if (/Firefox\//i.test(ua)) browser = 'Mozilla Firefox';
+  else if (/Safari\//i.test(ua)) browser = 'Apple Safari';
+  else if (/Opera|OPR\//i.test(ua)) browser = 'Opera';
+
+  const isMobile = /Mobi|Android|iPhone/i.test(ua);
+  const typeStr = isMobile ? 'Mobile' : 'Desktop';
+
+  return {
+    os,
+    browser,
+    type: typeStr,
+    name: `${os} • ${browser} (${typeStr})`
+  };
+}
 
 // ==============================================================================
 // Authentication & Session Handlers
@@ -56,16 +96,27 @@ function setupAuthEventListeners() {
       spinner.classList.remove('hidden');
       errorAlert.classList.add('hidden');
 
+      const devId = getOrCreateDeviceId();
+      const devInfo = getClientDeviceInfo();
+
       try {
         const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
+          body: JSON.stringify({
+            username,
+            password,
+            device_id: devId,
+            device_name: devInfo.name
+          })
         });
         const data = await res.json();
 
         if (res.ok && data.success) {
           showToast(`เข้าสู่ระบบสำเร็จ ยินดีต้อนรับ ${data.username}`, 'success');
+          if (data.is_new_device) {
+            showToast('🔔 บันทึกอุปกรณ์นี้ในระบบแล้ว และส่งการแจ้งเตือนทาง Email ให้เรียบร้อย', 'info');
+          }
           showDashboard(data.username);
         } else {
           errorText.textContent = data.error || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
@@ -1546,6 +1597,338 @@ function closeWolEditModal() {
   if (modal) {
     modal.classList.add('hidden');
     modal.classList.remove('flex');
+  }
+}
+
+// ==============================================================================
+// Security, Login Logs & Email Alert Management
+// ==============================================================================
+let currentSecurityTab = 'history';
+
+function setupSecurityEventListeners() {
+  const btnSec = document.getElementById('btn-security');
+  const btnSecMobile = document.getElementById('btn-security-mobile');
+  const btnClose = document.getElementById('btn-close-security-modal');
+
+  if (btnSec) btnSec.addEventListener('click', openSecurityModal);
+  if (btnSecMobile) btnSecMobile.addEventListener('click', openSecurityModal);
+  if (btnClose) btnClose.addEventListener('click', closeSecurityModal);
+
+  // Close when clicking modal backdrop
+  const modal = document.getElementById('modal-security');
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeSecurityModal();
+    });
+  }
+
+  // Toggle password visibility in security modal
+  const btnTogglePwd = document.getElementById('btn-toggle-sec-pwd');
+  const pwdInput = document.getElementById('sec-email-password');
+  if (btnTogglePwd && pwdInput) {
+    btnTogglePwd.addEventListener('click', () => {
+      const isPass = pwdInput.type === 'password';
+      pwdInput.type = isPass ? 'text' : 'password';
+      btnTogglePwd.textContent = isPass ? 'ซ่อน' : 'แสดง';
+    });
+  }
+
+  // Form submit for email config
+  const formEmail = document.getElementById('form-security-email');
+  if (formEmail) {
+    formEmail.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await saveSecurityEmailConfig();
+    });
+  }
+}
+
+function openSecurityModal() {
+  const modal = document.getElementById('modal-security');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    switchSecurityTab('history');
+    fetchSecurityData();
+  }
+}
+
+function closeSecurityModal() {
+  const modal = document.getElementById('modal-security');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+}
+
+function switchSecurityTab(tab) {
+  currentSecurityTab = tab;
+  const tabs = ['history', 'devices', 'email'];
+  tabs.forEach(t => {
+    const el = document.getElementById(`sec-tab-${t}`);
+    const btn = document.getElementById(`tab-btn-sec-${t}`);
+    if (el) el.classList.toggle('hidden', t !== tab);
+    if (btn) {
+      if (t === tab) {
+        btn.className = 'py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 border-indigo-500 text-indigo-400 flex items-center gap-2 transition cursor-pointer whitespace-nowrap';
+      } else {
+        btn.className = 'py-3 px-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition cursor-pointer whitespace-nowrap';
+      }
+    }
+  });
+}
+
+async function fetchSecurityData() {
+  try {
+    const res = await fetch('/api/security/history');
+    if (res.status === 401) {
+      showLoginView();
+      return;
+    }
+    const data = await res.json();
+    if (res.ok) {
+      renderSecurityHistory(data.history || []);
+      renderSecurityDevices(data.devices || []);
+      renderSecurityConfig(data.config || {});
+    }
+  } catch (err) {
+    console.error('Error fetching security data:', err);
+    showToast('เกิดข้อผิดพลาดในการโหลดข้อมูลความปลอดภัย', 'error');
+  }
+}
+
+function renderSecurityHistory(history) {
+  const container = document.getElementById('sec-history-container');
+  const countBadge = document.getElementById('badge-history-count');
+  if (countBadge) countBadge.textContent = history.length;
+  if (!container) return;
+
+  if (history.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-10 text-slate-500 text-xs">
+        <svg class="w-8 h-8 mx-auto mb-2 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <p>ยังไม่มีประวัติการเข้าสู่ระบบที่บันทึกไว้</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = history.map(item => {
+    const isSuccess = item.status === 'success';
+    const statusBadge = isSuccess
+      ? `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>สำเร็จ</span>`
+      : `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/25 px-2 py-0.5 rounded-full"><span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span>ล้มเหลว (${escapeHtml(item.reason || 'รหัสผ่านผิด')})</span>`;
+
+    const newDeviceBadge = item.is_new_device
+      ? `<span class="text-[10px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full animate-pulse">⚡ อุปกรณ์ใหม่</span>`
+      : '';
+
+    const locationText = item.city && item.city !== 'Local Subnet' && item.city !== 'เครือข่ายภายในบ้าน'
+      ? `${item.country} • ${item.city}`
+      : (item.country || 'Local LAN');
+
+    return `
+      <div class="p-3 sm:p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700/80 transition flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div class="space-y-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-bold text-xs sm:text-sm text-white">${escapeHtml(item.device_name || 'Unknown Device')}</span>
+            ${statusBadge}
+            ${newDeviceBadge}
+          </div>
+          <div class="flex items-center gap-2 text-[11px] text-slate-400 font-mono flex-wrap">
+            <span>👤 ${escapeHtml(item.username || '-')}</span>
+            <span>•</span>
+            <span class="text-indigo-400 font-semibold">${escapeHtml(item.ip || '-')}</span>
+            <span>•</span>
+            <span class="text-purple-400">${escapeHtml(item.mac || 'N/A')}</span>
+            <span>•</span>
+            <span class="text-emerald-400 font-sans">${escapeHtml(locationText)}</span>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-500 font-mono shrink-0 sm:text-right">
+          ${escapeHtml(item.time_str || '')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderSecurityDevices(devices) {
+  const container = document.getElementById('sec-devices-container');
+  const countBadge = document.getElementById('badge-devices-count');
+  if (countBadge) countBadge.textContent = devices.length;
+  if (!container) return;
+
+  if (devices.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-10 text-slate-500 text-xs">
+        <svg class="w-8 h-8 mx-auto mb-2 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        <p>ยังไม่มีอุปกรณ์ที่บันทึกไว้ในระบบ</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = devices.map(dev => {
+    return `
+      <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-start gap-3 min-w-0">
+          <div class="w-9 h-9 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+          </div>
+          <div class="min-w-0 space-y-0.5">
+            <div class="flex items-center gap-2">
+              <h5 class="text-xs sm:text-sm font-bold text-white truncate">${escapeHtml(dev.device_name || 'Device')}</h5>
+              <span class="text-[10px] px-1.5 py-0.2 rounded bg-indigo-950/80 text-indigo-300 border border-indigo-800/40 font-mono">${escapeHtml(dev.username || 'user')}</span>
+            </div>
+            <div class="text-[11px] text-slate-400 font-mono flex items-center gap-2 flex-wrap">
+              <span>IP: <span class="text-slate-200">${escapeHtml(dev.last_ip || '-')}</span></span>
+              <span>•</span>
+              <span>MAC: <span class="text-purple-400">${escapeHtml(dev.last_mac || 'N/A')}</span></span>
+              <span>•</span>
+              <span class="text-emerald-400 font-sans">${escapeHtml(dev.country || 'Local LAN')}</span>
+            </div>
+            <div class="text-[10px] text-slate-500 font-mono">
+              เข้าใช้งานล่าสุด: ${escapeHtml(dev.last_login_str || '-')} (บันทึกครั้งแรก: ${escapeHtml(dev.first_login_str || '-')})
+            </div>
+          </div>
+        </div>
+
+        <button onclick="deleteTrustedDevice('${dev.device_id}')" class="self-end sm:self-center px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[11px] font-semibold transition cursor-pointer active:scale-95 shrink-0">
+          ลบอุปกรณ์ (Untrust)
+        </button>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderSecurityConfig(cfg) {
+  const recipientInput = document.getElementById('sec-email-recipient');
+  const senderInput = document.getElementById('sec-email-sender');
+  const enabledCheckbox = document.getElementById('sec-email-enabled');
+  const statusBadge = document.getElementById('sec-email-status-badge');
+  const pwdBadge = document.getElementById('sec-password-configured-badge');
+
+  if (recipientInput && cfg.recipient) recipientInput.value = cfg.recipient;
+  if (senderInput && cfg.sender_email) senderInput.value = cfg.sender_email;
+  if (enabledCheckbox) enabledCheckbox.checked = cfg.enabled !== false;
+
+  if (statusBadge) {
+    if (cfg.enabled !== false) {
+      statusBadge.className = 'text-[10px] px-2 py-0.5 rounded font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30';
+      statusBadge.textContent = 'เปิดใช้งาน';
+    } else {
+      statusBadge.className = 'text-[10px] px-2 py-0.5 rounded font-mono bg-slate-800 text-slate-400 border border-slate-700';
+      statusBadge.textContent = 'ปิดการใช้งาน';
+    }
+  }
+
+  if (pwdBadge) {
+    if (cfg.has_password) {
+      pwdBadge.className = 'text-[10px] text-emerald-400 font-mono flex items-center gap-1';
+      pwdBadge.innerHTML = '● ตั้งค่ารหัสผ่านแล้ว';
+    } else {
+      pwdBadge.className = 'text-[10px] text-amber-400 font-mono flex items-center gap-1';
+      pwdBadge.innerHTML = '⚠️ ยังไม่ได้ระบุรหัสผ่าน';
+    }
+  }
+}
+
+async function saveSecurityEmailConfig() {
+  const recipient = document.getElementById('sec-email-recipient')?.value.trim();
+  const sender_email = document.getElementById('sec-email-sender')?.value.trim();
+  const sender_password = document.getElementById('sec-email-password')?.value;
+  const enabled = document.getElementById('sec-email-enabled')?.checked;
+
+  try {
+    const res = await fetch('/api/security/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipient, sender_email, sender_password, enabled })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(data.message || 'บันทึกการตั้งค่าเรียบร้อยแล้ว', 'success');
+      document.getElementById('sec-email-password').value = '';
+      await fetchSecurityData();
+    } else {
+      showToast(data.error || 'ไม่สามารถบันทึกได้', 'error');
+    }
+  } catch (err) {
+    showToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'error');
+  }
+}
+
+async function sendTestSecurityEmail() {
+  const btn = document.getElementById('btn-test-email');
+  const originalHtml = btn ? btn.innerHTML : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('opacity-75');
+    btn.innerHTML = `
+      <svg class="w-3.5 h-3.5 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+      <span>กำลังส่ง Email ทดสอบ...</span>
+    `;
+  }
+
+  try {
+    const res = await fetch('/api/security/test-email', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(data.message || 'ส่งอีเมลทดสอบสำเร็จแล้ว!', 'success');
+    } else {
+      showToast(data.error || 'ส่งอีเมลไม่สำเร็จ กรุณาตรวจสอบรหัสผ่าน App Password', 'error');
+    }
+  } catch (err) {
+    showToast('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', 'error');
+  } finally {
+    if (btn && originalHtml) {
+      btn.disabled = false;
+      btn.classList.remove('opacity-75');
+      btn.innerHTML = originalHtml;
+    }
+  }
+}
+
+async function deleteTrustedDevice(deviceId) {
+  if (!confirm('คุณต้องการลบอุปกรณ์นี้ออกจากรายการที่เชื่อถือหรือไม่?\n(หากลบแล้ว การล็อกอินครั้งต่อไปจากเครื่องนี้จะแจ้งเตือนทาง Email ทันที)')) {
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/security/devices/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_id: deviceId })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(data.message || 'ลบอุปกรณ์เรียบร้อยแล้ว', 'success');
+      await fetchSecurityData();
+    } else {
+      showToast(data.error || 'ไม่สามารถลบอุปกรณ์ได้', 'error');
+    }
+  } catch (err) {
+    showToast('เกิดข้อผิดพลาดในการลบอุปกรณ์', 'error');
+  }
+}
+
+async function clearSecurityHistory() {
+  if (!confirm('คุณต้องการล้างประวัติการเข้าสู่ระบบทั้งหมดหรือไม่?')) {
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/security/clear-history', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(data.message || 'ล้างประวัติเรียบร้อยแล้ว', 'success');
+      await fetchSecurityData();
+    } else {
+      showToast(data.error || 'ไม่สามารถล้างประวัติได้', 'error');
+    }
+  } catch (err) {
+    showToast('เกิดข้อผิดพลาดในการล้างประวัติ', 'error');
   }
 }
 
