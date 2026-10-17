@@ -167,7 +167,7 @@ DEFAULT_CONFIG = {
             "smtp_host": "smtp.gmail.com",
             "smtp_port": 587,
             "use_tls": True,
-            "sender_email": "bioheart.kalel@gmail.com",
+            "sender_email": "bioheart.darklight@gmail.com",
             "sender_password": "",
             "sender_name": "Game Server Security Alert"
         }
