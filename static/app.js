@@ -408,6 +408,11 @@ async function fetchStatus() {
       renderWolDevices(currentWolDevices);
     }
 
+    // Update Proxmox VE Host Storage
+    if (data.pve_storage) {
+      updatePveStorageMetrics(data.pve_storage);
+    }
+
   } catch (err) {
     console.error('Failed to fetch status:', err);
   }
@@ -435,6 +440,97 @@ function updateHostMetrics(sys) {
 
   // Uptime
   document.getElementById('metric-uptime').textContent = sys.uptime || '-';
+}
+
+function updatePveStorageMetrics(pve) {
+  if (!pve) return;
+  const section = document.getElementById('pve-storage-section');
+  if (!section) return;
+
+  if (!pve.available) {
+    return;
+  }
+
+  const setText = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  };
+
+  const vgFree = pve.vg_free_gb != null ? pve.vg_free_gb.toFixed(1) : '0.0';
+  const vgSize = pve.vg_size_gb != null ? pve.vg_size_gb.toFixed(1) : '237.0';
+  const poolUnalloc = pve.unallocated_quota_gb != null ? pve.unallocated_quota_gb.toFixed(1) : '0.0';
+  const poolSize = pve.pool_size_gb != null ? pve.pool_size_gb.toFixed(1) : '140.9';
+  const poolPhysFree = pve.pool_free_gb != null ? pve.pool_free_gb.toFixed(1) : '0.0';
+  const poolUsedGb = pve.pool_used_gb != null ? pve.pool_used_gb.toFixed(1) : '0.0';
+  const poolUsedPct = pve.pool_used_pct != null ? pve.pool_used_pct.toFixed(1) : '0.0';
+  const vmProv = pve.vm_provisioned_gb != null ? pve.vm_provisioned_gb.toFixed(1) : '0.0';
+  const rootFree = pve.root_free_gb != null ? pve.root_free_gb.toFixed(1) : '0.0';
+  const rootUsed = pve.root_used_gb != null ? pve.root_used_gb.toFixed(1) : '0.0';
+  const rootSize = pve.root_size_gb != null ? pve.root_size_gb.toFixed(1) : '68.0';
+
+  // 1. Highlight badge & stat cards
+  setText('pve-header-vg-free', `${vgFree} GB`);
+  setText('pve-stat-vg-free', `${vgFree} GB`);
+  setText('pve-stat-vg-total', `/ ${vgSize} GB`);
+
+  setText('pve-stat-pool-unalloc', `${poolUnalloc} GB`);
+  setText('pve-stat-pool-total', `/ ${poolSize} GB`);
+  setText('pve-stat-vm-prov', `${vmProv} GB`);
+
+  setText('pve-stat-pool-phys-free', `${poolPhysFree} GB`);
+  setText('pve-stat-pool-total-2', `/ ${poolSize} GB`);
+  setText('pve-stat-pool-used-gb', `${poolUsedGb} GB`);
+  setText('pve-stat-pool-used-pct', `${poolUsedPct}%`);
+
+  setText('pve-stat-root-free', `${rootFree} GB`);
+  setText('pve-stat-root-total', `/ ${rootSize} GB`);
+  setText('pve-stat-root-used-gb', `${rootUsed} GB`);
+
+  // 2. Multi-segment Disk Bar
+  const total = pve.vg_size_gb || 237.0;
+  const rootVal = pve.root_size_gb || 69.25;
+  const poolUsedVal = pve.pool_used_gb || 0;
+  const poolFreeVal = pve.pool_free_gb || 0;
+  const vgFreeVal = pve.vg_free_gb || 0;
+  const swapVal = Math.max(0, total - (rootVal + (poolUsedVal + poolFreeVal) + vgFreeVal));
+
+  const pct = (val) => `${Math.max(0.5, (val / total) * 100).toFixed(1)}%`;
+
+  const barRoot = document.getElementById('pve-bar-root');
+  if (barRoot) {
+    barRoot.style.width = pct(rootVal);
+    barRoot.title = `Host Root (/): ${rootUsed} GB used / ${rootSize} GB`;
+  }
+
+  const barPoolUsed = document.getElementById('pve-bar-pool-used');
+  if (barPoolUsed) {
+    barPoolUsed.style.width = pct(poolUsedVal);
+    barPoolUsed.title = `VM Pool เขียนจริง: ${poolUsedGb} GB (${poolUsedPct}%)`;
+  }
+
+  const barPoolFree = document.getElementById('pve-bar-pool-free');
+  if (barPoolFree) {
+    barPoolFree.style.width = pct(poolFreeVal);
+    barPoolFree.title = `VM Pool เขียนได้อีก: ${poolPhysFree} GB`;
+  }
+
+  const barVgFree = document.getElementById('pve-bar-vg-free');
+  if (barVgFree) {
+    barVgFree.style.width = pct(vgFreeVal);
+    barVgFree.title = `LVM Free (ยังไม่จัดสรร): ${vgFree} GB`;
+  }
+
+  const barSwap = document.getElementById('pve-bar-swap');
+  if (barSwap) {
+    barSwap.style.width = pct(swapVal > 0 ? swapVal : 8.0);
+    barSwap.title = `Swap: ${(swapVal > 0 ? swapVal : 8.0).toFixed(1)} GB`;
+  }
+
+  setText('pve-disk-bar-total', `${vgSize} GB Total`);
+  setText('pve-legend-root', `${rootSize} GB`);
+  setText('pve-legend-pool-used', `${poolUsedGb} GB`);
+  setText('pve-legend-pool-free', `${poolPhysFree} GB`);
+  setText('pve-legend-vg-free', `${vgFree} GB`);
 }
 
 function renderGames(games) {

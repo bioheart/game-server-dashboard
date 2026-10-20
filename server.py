@@ -172,6 +172,10 @@ DEFAULT_CONFIG = {
             "sender_name": "Game Server Security Alert"
         }
     },
+    "pve": {
+        "enabled": True,
+        "host": "192.168.1.50"
+    },
     "games": [
         {
             "id": "necesse",
@@ -625,6 +629,87 @@ MAC Address: {client_mac}
         err_msg = f"ไม่สามารถส่งอีเมลได้ ({e})"
         print(f"[Security] Failed to send email to {recipient}: {e}")
         return False, err_msg
+
+# ==============================================================================
+# Proxmox VE Host Storage Metrics Collector
+# ==============================================================================
+_pve_storage_cache = {}
+_pve_storage_last_check = 0
+_pve_storage_lock = threading.Lock()
+_pve_storage_updating = False
+
+def _update_pve_storage_worker(host="192.168.1.50"):
+    global _pve_storage_cache, _pve_storage_last_check, _pve_storage_updating
+    cmd = [
+        "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3", "-o", "StrictHostKeyChecking=accept-new",
+        f"root@{host}",
+        "vgs --units g --nosuffix --noheadings -o vg_size,vg_free pve 2>/dev/null && lvs --units g --nosuffix --noheadings -o lv_size,data_percent pve/data 2>/dev/null && lvs --units g --nosuffix --noheadings -o lv_name,lv_size,pool_lv pve 2>/dev/null && df -BG / | tail -n 1"
+    ]
+    try:
+        res = subprocess.check_output(cmd, text=True, timeout=4).strip().splitlines()
+        if len(res) >= 3:
+            vg_parts = res[0].split()
+            vg_size = float(vg_parts[0]) if len(vg_parts) >= 1 else 0.0
+            vg_free = float(vg_parts[1]) if len(vg_parts) >= 2 else 0.0
+
+            pool_parts = res[1].split()
+            pool_size = float(pool_parts[0]) if len(pool_parts) >= 1 else 0.0
+            pool_used_pct = float(pool_parts[1]) if len(pool_parts) >= 2 else 0.0
+            pool_used_gb = round(pool_size * (pool_used_pct / 100.0), 1)
+            pool_free_gb = round(max(0, pool_size - pool_used_gb), 1)
+
+            vm_provisioned = 0.0
+            for line in res[2:-1]:
+                parts = line.split()
+                if len(parts) >= 3 and parts[2] == "data" and parts[0].startswith("vm-"):
+                    try:
+                        vm_provisioned += float(parts[1])
+                    except ValueError:
+                        pass
+            vm_provisioned_gb = round(vm_provisioned, 1)
+            unallocated_quota_gb = round(max(0, pool_size - vm_provisioned_gb), 1)
+
+            root_parts = res[-1].split()
+            root_size = float(root_parts[1].replace("G", "")) if len(root_parts) >= 2 else 0.0
+            root_used = float(root_parts[2].replace("G", "")) if len(root_parts) >= 3 else 0.0
+            root_free = float(root_parts[3].replace("G", "")) if len(root_parts) >= 4 else 0.0
+            root_pct = float(root_parts[4].replace("%", "")) if len(root_parts) >= 5 else 0.0
+
+            with _pve_storage_lock:
+                _pve_storage_cache = {
+                    "available": True,
+                    "host_ip": host,
+                    "vg_size_gb": vg_size,
+                    "vg_free_gb": vg_free,
+                    "pool_size_gb": pool_size,
+                    "pool_used_gb": pool_used_gb,
+                    "pool_free_gb": pool_free_gb,
+                    "pool_used_pct": pool_used_pct,
+                    "vm_provisioned_gb": vm_provisioned_gb,
+                    "unallocated_quota_gb": unallocated_quota_gb,
+                    "root_size_gb": root_size,
+                    "root_used_gb": root_used,
+                    "root_free_gb": root_free,
+                    "root_pct": root_pct,
+                    "updated_at": int(time.time())
+                }
+                _pve_storage_last_check = time.time()
+    except Exception as e:
+        print(f"[PVE Storage] Error updating: {e}")
+    finally:
+        _pve_storage_updating = False
+
+def get_pve_host_storage(host="192.168.1.50"):
+    global _pve_storage_updating, _pve_storage_last_check
+    now = time.time()
+    if (now - _pve_storage_last_check > 8) and not _pve_storage_updating:
+        _pve_storage_updating = True
+        threading.Thread(target=_update_pve_storage_worker, args=(host,), daemon=True).start()
+
+    with _pve_storage_lock:
+        if _pve_storage_cache:
+            return dict(_pve_storage_cache)
+        return {"available": False, "loading": True}
 
 def get_system_metrics():
     global _last_cpu_idle, _last_cpu_total, _last_cpu_time
@@ -1259,8 +1344,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
                 games_status.append(game_data)
 
+            pve_host = cfg.get("pve", {}).get("host", "192.168.1.50")
+            pve_storage = get_pve_host_storage(pve_host)
+
             self.send_json({
                 "system": system_info,
+                "pve_storage": pve_storage,
                 "title": cfg.get("server", {}).get("title", "Game Server Dashboard"),
                 "games": games_status,
                 "playit": playit_info,
