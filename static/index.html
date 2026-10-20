@@ -250,7 +250,7 @@
       <!-- VM Disk -->
       <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-4 relative overflow-hidden backdrop-blur-sm">
         <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
-          <span class="font-medium">Disk Storage (VM 102)</span>
+          <span class="font-medium">Disk Storage</span>
           <span id="metric-disk-text" class="font-mono text-cyan-400 font-bold">0 GB</span>
         </div>
         <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
@@ -271,124 +271,6 @@
         </div>
       </div>
 
-    </div>
-
-    <!-- Proxmox Host Storage & Disk Allocation Section -->
-    <div id="pve-storage-section" class="bg-gradient-to-r from-slate-900/95 via-slate-900/85 to-slate-900/95 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl backdrop-blur-md relative overflow-hidden transition-all duration-300">
-      <!-- Glow ambient background -->
-      <div class="absolute -top-16 -right-16 w-44 h-44 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
-      <!-- Header Row -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 shrink-0 shadow-lg shadow-cyan-950/40">
-            <!-- Hard Drive Array Icon -->
-            <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
-            </svg>
-          </div>
-          <div>
-            <div class="flex items-center gap-2 flex-wrap">
-              <h3 class="font-bold text-sm sm:text-base text-white tracking-tight">พื้นที่จัดเก็บดิสก์ Proxmox VE (SSD 256 GB)</h3>
-              <span class="text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 shrink-0">Host 192.168.1.50</span>
-            </div>
-            <p class="text-[11px] sm:text-xs text-slate-400 mt-0.5">สถานะการจัดสรรดิสก์ (LVM Allocation, Thin Pool, และพื้นที่คงเหลือที่ยังไม่ได้จอง)</p>
-          </div>
-        </div>
-
-        <!-- Highlight Badge -->
-        <div class="flex items-center gap-2">
-          <div class="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center gap-2 text-xs font-mono text-emerald-300 shadow-sm">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>ยังไม่จัดสรร (LVM Free): <strong id="pve-header-vg-free" class="text-emerald-300 font-bold">16.0 GB</strong></span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 4 Stat Pill Cards Grid -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 mb-4">
-        
-        <!-- 1. LVM VG Free (ไม่ได้จัดสรรเลย) -->
-        <div class="p-3 sm:p-3.5 rounded-xl bg-slate-950/60 border border-emerald-500/20 hover:border-emerald-500/40 transition">
-          <div class="flex items-center justify-between mb-1">
-            <span class="text-[11px] font-medium text-emerald-400">ยังไม่จัดสรร (LVM Free)</span>
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-          </div>
-          <div class="flex items-baseline gap-1.5">
-            <span id="pve-stat-vg-free" class="font-mono text-lg sm:text-xl font-bold text-emerald-400">16.0 GB</span>
-            <span id="pve-stat-vg-total" class="text-[10px] text-slate-500 font-mono">/ 237.0 GB</span>
-          </div>
-          <p class="text-[10px] text-slate-400 mt-1">พื้นที่ว่างแท้จริง ยังไม่แบ่งให้ใคร</p>
-        </div>
-
-        <!-- 2. VM Pool Unallocated Quota (โควตาพูลที่ยังไม่จอง) -->
-        <div class="p-3 sm:p-3.5 rounded-xl bg-slate-950/60 border border-cyan-500/20 hover:border-cyan-500/40 transition">
-          <div class="flex items-center justify-between mb-1">
-            <span class="text-[11px] font-medium text-cyan-400">โควตาดิสก์ VM ที่ยังไม่จอง</span>
-            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-          </div>
-          <div class="flex items-baseline gap-1.5">
-            <span id="pve-stat-pool-unalloc" class="font-mono text-lg sm:text-xl font-bold text-cyan-400">40.9 GB</span>
-            <span id="pve-stat-pool-total" class="text-[10px] text-slate-500 font-mono">/ 140.9 GB</span>
-          </div>
-          <p class="text-[10px] text-slate-400 mt-1">จองให้ VM ไปแล้ว <span id="pve-stat-vm-prov">100.0 GB</span></p>
-        </div>
-
-        <!-- 3. VM Pool Physical Free (เขียนข้อมูลได้จริง) -->
-        <div class="p-3 sm:p-3.5 rounded-xl bg-slate-950/60 border border-indigo-500/20 hover:border-indigo-500/40 transition">
-          <div class="flex items-center justify-between mb-1">
-            <span class="text-[11px] font-medium text-indigo-400">เนื้อที่เขียนจริงของ VM ที่เหลือ</span>
-            <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-          </div>
-          <div class="flex items-baseline gap-1.5">
-            <span id="pve-stat-pool-phys-free" class="font-mono text-lg sm:text-xl font-bold text-indigo-400">71.7 GB</span>
-            <span id="pve-stat-pool-total-2" class="text-[10px] text-slate-500 font-mono">/ 140.9 GB</span>
-          </div>
-          <p class="text-[10px] text-slate-400 mt-1">ใช้จริง <span id="pve-stat-pool-used-gb">69.2 GB</span> (<span id="pve-stat-pool-used-pct">49.1%</span>)</p>
-        </div>
-
-        <!-- 4. Host Root Free (เนื้อที่โฮสต์หลัก) -->
-        <div class="p-3 sm:p-3.5 rounded-xl bg-slate-950/60 border border-amber-500/20 hover:border-amber-500/40 transition">
-          <div class="flex items-center justify-between mb-1">
-            <span class="text-[11px] font-medium text-amber-400">พื้นที่ว่างระบบโฮสต์ (local /)</span>
-            <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-          </div>
-          <div class="flex items-baseline gap-1.5">
-            <span id="pve-stat-root-free" class="font-mono text-lg sm:text-xl font-bold text-amber-400">50.0 GB</span>
-            <span id="pve-stat-root-total" class="text-[10px] text-slate-500 font-mono">/ 68.0 GB</span>
-          </div>
-          <p class="text-[10px] text-slate-400 mt-1">ใช้ไป <span id="pve-stat-root-used-gb">15.0 GB</span> (เก็บ ISO/Backup)</p>
-        </div>
-
-      </div>
-
-      <!-- Visual Multi-segment Disk Bar -->
-      <div class="bg-slate-950/60 rounded-xl p-3 border border-slate-800/80">
-        <div class="flex items-center justify-between text-[11px] text-slate-400 font-mono mb-2">
-          <span>สัดส่วนการแบ่งพาร์ติชันดิสก์ทั้งหมด (SK hynix 256GB - ใช้งานได้ 237.0 GB)</span>
-          <span id="pve-disk-bar-total" class="text-slate-300 font-bold">237.0 GB Total</span>
-        </div>
-        <div class="w-full bg-slate-800/80 rounded-lg h-3.5 flex overflow-hidden p-0.5 gap-0.5">
-          <!-- Root 69.2GB (29.2%) -->
-          <div id="pve-bar-root" style="width: 29.2%" class="bg-amber-500 hover:bg-amber-400 rounded-sm transition-all cursor-pointer" title="Host Root (/): 68.0 GB"></div>
-          <!-- Thin Pool Used 69.2GB (29.2%) -->
-          <div id="pve-bar-pool-used" style="width: 29.2%" class="bg-indigo-500 hover:bg-indigo-400 rounded-sm transition-all cursor-pointer" title="VM Pool เขียนจริง: 69.2 GB"></div>
-          <!-- Thin Pool Free 71.7GB (30.3%) -->
-          <div id="pve-bar-pool-free" style="width: 30.3%" class="bg-cyan-500 hover:bg-cyan-400 rounded-sm transition-all cursor-pointer" title="VM Pool เขียนได้อีก: 71.7 GB"></div>
-          <!-- LVM Free 16GB (6.8%) -->
-          <div id="pve-bar-vg-free" style="width: 6.8%" class="bg-emerald-500 hover:bg-emerald-400 rounded-sm transition-all cursor-pointer" title="LVM Free (ยังไม่จัดสรร): 16.0 GB"></div>
-          <!-- Swap 8GB (3.4%) -->
-          <div id="pve-bar-swap" style="width: 3.4%" class="bg-slate-600 hover:bg-slate-500 rounded-sm transition-all cursor-pointer" title="Swap: 8.0 GB"></div>
-        </div>
-        <!-- Legend -->
-        <div class="flex items-center gap-3 sm:gap-4 mt-2.5 text-[10px] sm:text-[11px] text-slate-400 font-mono flex-wrap">
-          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-amber-500"></span>Host Root: <span id="pve-legend-root">68 GB</span></span>
-          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-indigo-500"></span>VM Pool เขียนจริง: <span id="pve-legend-pool-used">69.2 GB</span></span>
-          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-cyan-500"></span>VM Pool เขียนได้อีก: <span id="pve-legend-pool-free">71.7 GB</span></span>
-          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-emerald-500 font-bold text-emerald-300"></span>LVM Free (ยังไม่จัดสรร): <span id="pve-legend-vg-free">16.0 GB</span></span>
-          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-slate-600"></span>Swap: 8 GB</span>
-        </div>
-      </div>
     </div>
 
     <!-- Wake on LAN Remote PC Management Section -->
@@ -856,6 +738,6 @@
   <!-- Toast Notification Container -->
   <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm pointer-events-none"></div>
 
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>
