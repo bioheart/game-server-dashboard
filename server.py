@@ -845,21 +845,33 @@ def measure_host_ping(host):
         return None
 
     try:
-        # Try IPv4 ping first (-4, 1 packet, 2s deadline)
+        # Try IPv4 ping first (-4, 2 packets, 2s deadline) to smooth out jitter
+        cmd = ["ping", "-4", "-c", "2", "-W", "2", host]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=4)
+        if res.returncode == 0:
+            m = re.search(r"rtt [^=]+=\s*[\d\.]+/([\d\.]+)/", res.stdout)
+            if m:
+                return round(float(m.group(1)), 1)
+            m = re.search(r"time=([\d\.]+)\s*ms", res.stdout)
+            if m:
+                return round(float(m.group(1)), 1)
+
+        # Fallback to single packet IPv4
         cmd = ["ping", "-4", "-c", "1", "-W", "2", host]
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
-        if res.returncode != 0:
-            # Fallback to standard ping
-            cmd = ["ping", "-c", "1", "-W", "2", host]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
-
         if res.returncode == 0:
             m = re.search(r"time=([\d\.]+)\s*ms", res.stdout)
             if m:
                 return round(float(m.group(1)), 1)
-            m2 = re.search(r"rtt [^=]+=\s*[\d\.]+/([\d\.]+)/", res.stdout)
-            if m2:
-                return round(float(m2.group(1)), 1)
+
+        # Fallback to standard ping ONLY for non-Playit hosts (Playit IPv6 routes to US at 220ms)
+        if "ply.gg" not in host.lower():
+            cmd = ["ping", "-c", "1", "-W", "2", host]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+            if res.returncode == 0:
+                m = re.search(r"time=([\d\.]+)\s*ms", res.stdout)
+                if m:
+                    return round(float(m.group(1)), 1)
         return None
     except Exception:
         return None
@@ -969,23 +981,87 @@ def send_wol_magic_packet(mac_address, broadcast_ip="192.168.1.255", port=9):
         sock.close()
     return True
 
-def _delayed_ping_check(ip):
+def find_ip_by_mac(target_mac, default_ip=None):
+    """
+    Auto-detect current IPv4 address from ARP / Neighbor cache using target MAC address.
+    Gracefully handles dynamic DHCP IP changes without requiring manual reconfiguration.
+    """
+    if not target_mac:
+        return default_ip
+    clean_target = re.sub(r"[^0-9a-fA-F]", "", str(target_mac)).lower()
+    if len(clean_target) != 12:
+        return default_ip
+
+    candidates = []
+
+    # 1. Query `ip -4 neigh show` which tracks REACHABLE / STALE / FAILED states
+    try:
+        res = subprocess.run(["ip", "-4", "neigh", "show"], capture_output=True, text=True, timeout=1.5)
+        if res.returncode == 0:
+            for line in res.stdout.splitlines():
+                parts = line.strip().split()
+                if len(parts) >= 5 and "lladdr" in parts:
+                    idx = parts.index("lladdr")
+                    if idx + 1 < len(parts):
+                        ip = parts[0]
+                        mac = parts[idx + 1]
+                        state = parts[idx + 2] if idx + 2 < len(parts) else ""
+                        if re.sub(r"[^0-9a-fA-F]", "", mac).lower() == clean_target and state != "FAILED":
+                            if state == "REACHABLE":
+                                candidates.insert(0, ip)
+                            else:
+                                candidates.append(ip)
+    except Exception:
+        pass
+
+    # 2. Check /proc/net/arp as secondary fallback
+    if not candidates:
+        try:
+            if os.path.exists("/proc/net/arp"):
+                with open("/proc/net/arp", "r", encoding="utf-8", errors="ignore") as f:
+                    for line in f.readlines()[1:]:
+                        parts = line.split()
+                        if len(parts) >= 4:
+                            ip, _, flags, mac = parts[0], parts[1], parts[2], parts[3]
+                            if re.sub(r"[^0-9a-fA-F]", "", mac).lower() == clean_target and flags == "0x2":
+                                candidates.append(ip)
+        except Exception:
+            pass
+
+    # 3. If default_ip is among candidates and responds, keep it
+    if default_ip and default_ip in candidates:
+        if measure_host_ping(default_ip) is not None:
+            return default_ip
+
+    # 4. Probe candidates to verify which one responds to ICMP ping
+    for ip in candidates:
+        if measure_host_ping(ip) is not None:
+            return ip
+
+    return candidates[0] if candidates else default_ip
+
+def _delayed_ping_check(ip, mac=None):
     """Periodically ping target IP after WOL to detect when the PC finishes booting"""
-    if not ip:
-        return
+    target_ip = ip
     for interval in [4, 4, 5, 5, 6, 8, 10]:
         time.sleep(interval)
-        ms = measure_host_ping(ip)
+        if mac:
+            resolved = find_ip_by_mac(mac, target_ip)
+            if resolved:
+                target_ip = resolved
+        if not target_ip:
+            continue
+        ms = measure_host_ping(target_ip)
         with _ping_lock:
             if ms is not None:
                 status = "good" if ms < 60 else ("fair" if ms < 130 else "high")
-                _ping_cache[ip] = {"ms": ms, "status": status, "updated": time.time()}
+                _ping_cache[target_ip] = {"ms": ms, "status": status, "updated": time.time()}
                 break
             else:
-                _ping_cache[ip] = {"ms": None, "status": "offline", "updated": time.time()}
+                _ping_cache[target_ip] = {"ms": None, "status": "offline", "updated": time.time()}
 
 def get_wol_devices():
-    """Retrieve list of configured Wake-on-LAN devices with real-time ping status"""
+    """Retrieve list of configured Wake-on-LAN devices with real-time MAC resolution and ping status"""
     cfg = load_config()
     wol_cfg = cfg.get("wol", {})
     devices = wol_cfg.get("devices", [])
@@ -996,7 +1072,7 @@ def get_wol_devices():
                 "id": "pc",
                 "name": "PC ของฉัน (Gaming PC)",
                 "mac": "D8-5E-D3-49-AF-47",
-                "ip": "192.168.1.163",
+                "ip": "192.168.1.107",
                 "broadcast": "192.168.1.255",
                 "port": 9,
                 "description": "Windows Gaming / Main PC"
@@ -1004,8 +1080,20 @@ def get_wol_devices():
         ]
 
     result = []
+    config_updated = False
     for dev in devices:
-        ip = dev.get("ip")
+        mac = dev.get("mac", "")
+        configured_ip = dev.get("ip", "")
+
+        # Dynamically auto-resolve active IP from MAC via ARP/neighbor cache
+        live_ip = find_ip_by_mac(mac, configured_ip) if mac else configured_ip
+        ip = live_ip or configured_ip
+
+        # If a live IP was discovered and differs from config, keep config in sync
+        if live_ip and configured_ip != live_ip:
+            dev["ip"] = live_ip
+            config_updated = True
+
         ping_info = None
         is_online = False
         if ip:
@@ -1015,10 +1103,19 @@ def get_wol_devices():
 
         result.append({
             **dev,
-            "mac_formatted": format_mac(dev.get("mac", "")),
+            "ip": ip,
+            "mac_formatted": format_mac(mac),
             "is_online": is_online,
             "ping": ping_info
         })
+
+    if config_updated:
+        try:
+            cfg["wol"]["devices"] = devices
+            save_config(cfg)
+        except Exception:
+            pass
+
     return result
 
 def get_playit_details():
@@ -1701,8 +1798,14 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     name = target.get("name", "PC")
                 else:
                     mac = "D8-5E-D3-49-AF-47"
-                    ip = "192.168.1.163"
+                    ip = "192.168.1.107"
                     broadcast = "192.168.1.255"
+
+            # Auto-resolve live IP by MAC if available
+            if mac:
+                live_ip = find_ip_by_mac(mac, ip)
+                if live_ip:
+                    ip = live_ip
 
             try:
                 send_wol_magic_packet(mac, broadcast_ip=broadcast, port=port)
@@ -1711,7 +1814,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 # Register host for ping checks and start delayed boot monitor
                 if ip:
                     register_ping_host(ip)
-                    threading.Thread(target=_delayed_ping_check, args=(ip,), daemon=True).start()
+                threading.Thread(target=_delayed_ping_check, args=(ip, mac), daemon=True).start()
 
                 self.send_json({
                     "success": True,
@@ -1726,10 +1829,26 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         elif path == "/api/wol/ping":
             ip = payload.get("ip", "").strip()
-            if not ip:
-                devices = get_wol_devices()
-                if devices:
-                    ip = devices[0].get("ip", "")
+            mac = payload.get("mac", "").strip()
+            device_id = payload.get("device_id", "").strip()
+
+            devices = get_wol_devices()
+            target_dev = None
+            if device_id:
+                target_dev = next((d for d in devices if d.get("id") == device_id), None)
+            elif mac:
+                clean_m = re.sub(r"[^0-9a-fA-F]", "", mac).lower()
+                target_dev = next((d for d in devices if re.sub(r"[^0-9a-fA-F]", "", d.get("mac", "")).lower() == clean_m), None)
+
+            if target_dev:
+                mac = target_dev.get("mac", mac)
+                configured_ip = target_dev.get("ip", ip)
+                resolved = find_ip_by_mac(mac, configured_ip)
+                ip = resolved or configured_ip
+            elif mac and not ip:
+                ip = find_ip_by_mac(mac, "")
+            elif not ip and devices:
+                ip = devices[0].get("ip", "")
 
             if not ip:
                 self.send_json({"error": "IP address required"}, 400)
