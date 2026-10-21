@@ -1101,10 +1101,17 @@ def get_wol_devices():
             if ping_info and ping_info.get("status") in ("good", "fair", "high"):
                 is_online = True
 
+        web_port = dev.get("web_port", 8080)
+        web_url = dev.get("web_url")
+        if not web_url and ip and ip != "-":
+            web_url = f"http://{ip}:{web_port}" if web_port else f"http://{ip}"
+
         result.append({
             **dev,
             "ip": ip,
             "mac_formatted": format_mac(mac),
+            "web_port": web_port,
+            "web_url": web_url,
             "is_online": is_online,
             "ping": ping_info
         })
@@ -1882,6 +1889,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             broadcast = payload.get("broadcast", "192.168.1.255").strip()
             port = payload.get("port", 9)
             description = payload.get("description", "").strip()
+            web_port = payload.get("web_port", 8080)
+            try:
+                web_port = int(web_port) if web_port else 8080
+            except Exception:
+                web_port = 8080
+            web_url = payload.get("web_url", "").strip()
 
             if mac:
                 cleaned_mac = re.sub(r"[^0-9a-fA-F]", "", mac)
@@ -1899,19 +1912,28 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     if broadcast: dev["broadcast"] = broadcast
                     if port: dev["port"] = int(port)
                     if description is not None: dev["description"] = description
+                    dev["web_port"] = web_port
+                    if web_url:
+                        dev["web_url"] = web_url
+                    elif "web_url" in dev and not web_url:
+                        dev.pop("web_url", None)
                     found = True
                     break
 
             if not found:
-                devices.append({
+                new_dev = {
                     "id": dev_id,
                     "name": name or "PC ของฉัน (Gaming PC)",
                     "mac": mac or "D8-5E-D3-49-AF-47",
                     "ip": ip or "192.168.1.163",
                     "broadcast": broadcast or "192.168.1.255",
                     "port": int(port) if port else 9,
-                    "description": description or "Windows Gaming / Main PC"
-                })
+                    "description": description or "Windows Gaming / Main PC",
+                    "web_port": web_port
+                }
+                if web_url:
+                    new_dev["web_url"] = web_url
+                devices.append(new_dev)
 
             if save_config(cfg):
                 self.send_json({"success": True, "devices": get_wol_devices()})

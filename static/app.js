@@ -1307,6 +1307,7 @@ function setupWolEventListeners() {
       const broadcast = document.getElementById('wol-edit-broadcast').value.trim();
       const port = document.getElementById('wol-edit-port').value.trim();
       const desc = document.getElementById('wol-edit-desc').value.trim();
+      const webPort = document.getElementById('wol-edit-web-port') ? document.getElementById('wol-edit-web-port').value.trim() : '8080';
 
       try {
         const res = await fetch('/api/wol/edit', {
@@ -1319,7 +1320,8 @@ function setupWolEventListeners() {
             ip,
             broadcast,
             port: port ? parseInt(port) : 9,
-            description: desc
+            description: desc,
+            web_port: webPort ? parseInt(webPort) : 8080
           })
         });
 
@@ -1374,6 +1376,8 @@ function createWolCardHTML(dev) {
   const ip = dev.ip || '-';
   const broadcast = `${dev.broadcast || '192.168.1.255'}:${dev.port || 9}`;
   const pingMs = (dev.ping && dev.ping.ms !== null) ? `${dev.ping.ms} ms` : null;
+  const webPort = dev.web_port || 8080;
+  const webUrl = dev.web_url || (dev.ip && dev.ip !== '-' ? `http://${dev.ip}:${webPort}` : null);
 
   let statusBadgeHtml = '';
   let cardBorder = 'border-slate-800';
@@ -1427,6 +1431,14 @@ function createWolCardHTML(dev) {
             <div class="flex items-center gap-2 flex-wrap">
               <h3 class="font-bold text-sm sm:text-base text-white tracking-tight truncate">${escapeHtml(dev.name || 'PC')}</h3>
               <span class="text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20 shrink-0">Wake-on-LAN</span>
+              ${webUrl ? `
+                <a href="${escapeHtml(webUrl)}" target="_blank" rel="noopener noreferrer"
+                  title="เปิดหน้าระบบควบคุม PC (${escapeHtml(webUrl)})"
+                  class="text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 transition inline-flex items-center gap-1 shrink-0">
+                  <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                  <span>Web :${webPort}</span>
+                </a>
+              ` : ''}
             </div>
             <p class="text-[11px] sm:text-xs text-slate-400 mt-0.5 truncate">${escapeHtml(dev.description || 'เครื่องคอมพิวเตอร์หลัก (Local Network)')}</p>
           </div>
@@ -1449,11 +1461,16 @@ function createWolCardHTML(dev) {
         <!-- IP Address -->
         <div>
           <span class="text-[11px] text-slate-500 block mb-0.5">IP Address</span>
-          <div class="flex items-center gap-1.5">
+          <div class="flex items-center gap-1.5 flex-wrap">
             <span class="font-mono text-slate-200 font-semibold">${escapeHtml(ip)}</span>
-            <button onclick="copyToClipboard('${ip}', this, 'คัดลอก IP สำเร็จ')" title="Copy IP" class="text-slate-500 hover:text-slate-300 transition cursor-pointer">
+            <button onclick="copyToClipboard('${ip}', this, 'คัดลอก IP สำเร็จ')" title="Copy IP" class="text-slate-500 hover:text-slate-300 transition cursor-pointer p-0.5">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
             </button>
+            ${webUrl ? `
+              <a href="${escapeHtml(webUrl)}" target="_blank" rel="noopener noreferrer" title="เปิดหน้าเว็บควบคุมเครื่อง (${escapeHtml(webUrl)})" class="text-indigo-400 hover:text-indigo-300 p-0.5 rounded hover:bg-indigo-950/60 transition inline-flex items-center touch-manipulation">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+              </a>
+            ` : ''}
           </div>
         </div>
 
@@ -1489,7 +1506,7 @@ function createWolCardHTML(dev) {
 
       <!-- Action Buttons Row -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-        <div class="grid grid-cols-2 gap-2 sm:gap-2.5 w-full sm:flex sm:items-center sm:w-auto">
+        <div class="grid grid-cols-1 sm:flex sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
           <!-- Main Wake on LAN Button -->
           <button id="btn-wake-action-${dev.id}" onclick="confirmWakeDevice('${dev.id}')"
             class="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2.5 min-h-[42px] rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-lg shadow-amber-600/30 hover:shadow-amber-500/40 transition-all cursor-pointer whitespace-nowrap">
@@ -1508,6 +1525,18 @@ function createWolCardHTML(dev) {
             </svg>
             <span>ตรวจจับ Ping</span>
           </button>
+
+          <!-- Direct Link to Gaming PC Controller Service (:8080) -->
+          ${webUrl ? `
+            <a href="${escapeHtml(webUrl)}" target="_blank" rel="noopener noreferrer"
+              title="เปิดหน้าระบบควบคุม Gaming PC (${escapeHtml(webUrl)})"
+              class="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-2.5 min-h-[42px] rounded-xl ${isOnline ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white shadow-lg shadow-indigo-600/30 font-bold' : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60 font-semibold'} active:scale-95 text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap">
+              <svg class="w-4 h-4 ${isOnline ? 'text-cyan-200' : 'text-slate-400'} shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+              </svg>
+              <span>เปิดควบคุม PC (:8080) ↗</span>
+            </a>
+          ` : ''}
         </div>
 
         <div class="text-[11px] text-slate-500 flex items-center gap-1 font-mono">
@@ -1683,6 +1712,8 @@ function openWolEditModal(deviceId = 'pc') {
   document.getElementById('wol-edit-broadcast').value = dev.broadcast || '192.168.1.255';
   document.getElementById('wol-edit-port').value = dev.port || 9;
   document.getElementById('wol-edit-desc').value = dev.description || 'Windows Gaming / Main PC';
+  const webPortInput = document.getElementById('wol-edit-web-port');
+  if (webPortInput) webPortInput.value = dev.web_port || 8080;
 
   const modal = document.getElementById('modal-wol-edit');
   if (modal) {
