@@ -137,7 +137,7 @@
             </div>
             <p class="text-[11px] sm:text-xs text-slate-400 font-mono flex items-center gap-1.5 truncate">
               <span id="header-hostname" class="truncate max-w-[120px] sm:max-w-none">VM 102 (game-server)</span> • <span id="header-ip" class="text-indigo-400 shrink-0">192.168.1.123</span>
-              <button id="btn-copy-header-ip" title="Copy Host IP" class="text-slate-400 hover:text-white p-0.5 rounded hover:bg-slate-800 transition shrink-0">
+              <button id="btn-copy-header-ip" title="Copy Host IP" class="text-slate-400 hover:text-white p-1.5 -m-1 sm:p-0.5 sm:m-0 rounded hover:bg-slate-800 active:scale-90 transition shrink-0 touch-manipulation cursor-pointer">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
               </button>
             </p>
@@ -735,9 +735,39 @@
     </div>
   </div>
 
+  <!-- Modal: Mobile Copy Fallback (for strict iOS / Safari lockdown environments) -->
+  <div id="modal-copy-manual" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden p-5 space-y-4 animate-scale-in">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          </div>
+          <h3 class="font-bold text-sm text-white">คัดลอกข้อมูล</h3>
+        </div>
+        <button onclick="closeManualCopyModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5">แตะในช่องเพื่อไฮไลท์ หรือกดปุ่มคัดลอก:</label>
+        <input type="text" id="manual-copy-input" readonly class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-xs text-emerald-400 font-mono focus:outline-none focus:border-emerald-500 select-all" onclick="this.select(); this.setSelectionRange(0, 999999);">
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btn-manual-copy-action" class="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/20 cursor-pointer">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          <span>คัดลอก (Copy)</span>
+        </button>
+        <button onclick="closeManualCopyModal()" class="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 text-xs font-medium transition cursor-pointer">
+          ปิด
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm pointer-events-none"></div>
 
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

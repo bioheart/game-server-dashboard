@@ -659,9 +659,9 @@ function createGameCardHTML(game) {
                   <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                   Playit IP:
                 </span>
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-1.5 sm:gap-2">
                   <span class="text-emerald-300 font-bold select-all cursor-pointer hover:underline" onclick="copyToClipboard(this.innerText.trim(), this.nextElementSibling)" title="คลิกเพื่อคัดลอก">${escapeHtml(game.public_tunnel)}</span>
-                  <button onclick="copyToClipboard(this.getAttribute('data-copy'), this)" data-copy="${escapeHtml(game.public_tunnel)}" title="คัดลอก Playit IP" class="text-emerald-400 hover:text-white p-1 rounded hover:bg-emerald-900/60 transition flex items-center justify-center">
+                  <button onclick="copyToClipboard(this.getAttribute('data-copy'), this)" data-copy="${escapeHtml(game.public_tunnel)}" title="คัดลอก Playit IP" class="text-emerald-400 hover:text-white p-1.5 rounded-md hover:bg-emerald-900/60 active:scale-90 transition flex items-center justify-center min-w-[28px] min-h-[28px] touch-manipulation cursor-pointer">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                   </button>
                 </div>
@@ -675,9 +675,9 @@ function createGameCardHTML(game) {
                   <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
                   Local LAN:
                 </span>
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-1.5 sm:gap-2">
                   <span class="text-indigo-300 font-medium select-all cursor-pointer hover:underline" onclick="copyToClipboard(this.innerText.trim(), this.nextElementSibling)" title="คลิกเพื่อคัดลอก">${connectAddr}</span>
-                  <button onclick="copyToClipboard(this.getAttribute('data-copy'), this)" data-copy="${escapeHtml(connectAddr)}" title="คัดลอก Local LAN Address" class="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition flex items-center justify-center">
+                  <button onclick="copyToClipboard(this.getAttribute('data-copy'), this)" data-copy="${escapeHtml(connectAddr)}" title="คัดลอก Local LAN Address" class="text-slate-400 hover:text-white p-1.5 rounded-md hover:bg-slate-800 active:scale-90 transition flex items-center justify-center min-w-[28px] min-h-[28px] touch-manipulation cursor-pointer">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                   </button>
                 </div>
@@ -877,7 +877,7 @@ function openPlayitModal() {
         <div class="bg-slate-950/80 rounded-xl p-3 border border-slate-800 space-y-1.5 font-mono text-xs">
           <div class="flex items-center justify-between">
             <span class="text-emerald-400 font-bold select-all text-sm cursor-pointer hover:underline" onclick="copyToClipboard(this.innerText.trim(), this.parentElement.querySelector('button'))" title="คลิกเพื่อคัดลอก">${escapeHtml(t.display_address)}</span>
-            <button onclick="copyToClipboard(this.getAttribute('data-copy'), this)" data-copy="${escapeHtml(t.display_address)}" title="คัดลอก Tunnel Address" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-sans flex items-center gap-1.5 transition">
+            <button onclick="copyToClipboard(this.getAttribute('data-copy'), this)" data-copy="${escapeHtml(t.display_address)}" title="คัดลอก Tunnel Address" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white text-xs font-sans flex items-center gap-1.5 transition touch-manipulation cursor-pointer">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
               <span>Copy IP</span>
             </button>
@@ -1017,53 +1017,149 @@ function showToast(message, type = 'info') {
 }
 
 function fallbackCopyText(text) {
+  if (!text && text !== 0) return false;
   let success = false;
-  const textArea = document.createElement('textarea');
-  textArea.value = text;
-  
-  // Keep offscreen and fixed to prevent any scrolling
-  textArea.style.position = 'fixed';
-  textArea.style.top = '0';
-  textArea.style.left = '0';
-  textArea.style.width = '2em';
-  textArea.style.height = '2em';
-  textArea.style.padding = '0';
-  textArea.style.border = 'none';
-  textArea.style.outline = 'none';
-  textArea.style.boxShadow = 'none';
-  textArea.style.background = 'transparent';
-  textArea.style.opacity = '0';
-  textArea.setAttribute('readonly', '');
-  
-  document.body.appendChild(textArea);
-  
-  // iOS Safari compatibility
-  if (navigator.userAgent.match(/ipad|ipod|iphone/i)) {
-    textArea.contentEditable = 'true';
-    textArea.readOnly = false;
+  const str = String(text);
+  const isRTL = document.documentElement.getAttribute('dir') === 'rtl';
+  const yPosition = window.pageYOffset || document.documentElement.scrollTop || 0;
+
+  // Method 1: Clean hidden Textarea with iOS WebKit settings (prevent zoom with 16px font)
+  try {
+    const textArea = document.createElement('textarea');
+    textArea.value = str;
+    textArea.style.fontSize = '16px';
+    textArea.style.position = 'fixed';
+    textArea.style.top = '0';
+    textArea.style.left = '0';
+    textArea.style.width = '2em';
+    textArea.style.height = '2em';
+    textArea.style.padding = '0';
+    textArea.style.border = 'none';
+    textArea.style.outline = 'none';
+    textArea.style.boxShadow = 'none';
+    textArea.style.background = 'transparent';
+    textArea.style.color = 'transparent';
+    textArea.style.zIndex = '-9999';
+
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    textArea.setSelectionRange(0, str.length);
+
+    success = document.execCommand('copy');
+    document.body.removeChild(textArea);
+  } catch (err) {
+    success = false;
+  }
+
+  if (success) return true;
+
+  // Method 2: Off-screen textarea with readonly attribute (Clipboard.js standard pattern)
+  try {
+    const textArea = document.createElement('textarea');
+    textArea.value = str;
+    textArea.style.fontSize = '16px';
+    textArea.style.position = 'absolute';
+    textArea.style[isRTL ? 'right' : 'left'] = '-9999px';
+    textArea.style.top = `${yPosition}px`;
+    textArea.style.border = '0';
+    textArea.style.padding = '0';
+    textArea.style.margin = '0';
+    textArea.setAttribute('readonly', '');
+
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    textArea.setSelectionRange(0, str.length);
+
+    success = document.execCommand('copy');
+    document.body.removeChild(textArea);
+  } catch (err) {
+    success = false;
+  }
+
+  if (success) return true;
+
+  // Method 3: Contenteditable span container with DOM Range (iOS WebKit Range selection)
+  try {
+    const span = document.createElement('span');
+    span.textContent = str;
+    span.style.whiteSpace = 'pre';
+    span.style.fontSize = '16px';
+    span.style.position = 'absolute';
+    span.style[isRTL ? 'right' : 'left'] = '-9999px';
+    span.style.top = `${yPosition}px`;
+    span.contentEditable = 'true';
+    span.tabIndex = -1;
+
+    document.body.appendChild(span);
+
     const range = document.createRange();
-    range.selectNodeContents(textArea);
+    range.selectNodeContents(span);
     const sel = window.getSelection();
     if (sel) {
       sel.removeAllRanges();
       sel.addRange(range);
     }
-    textArea.setSelectionRange(0, 999999);
-  } else {
-    textArea.focus();
-    textArea.select();
-    textArea.setSelectionRange(0, textArea.value.length);
-  }
 
-  try {
     success = document.execCommand('copy');
+    if (sel) {
+      sel.removeAllRanges();
+    }
+    document.body.removeChild(span);
   } catch (err) {
-    console.error('execCommand copy failed:', err);
     success = false;
   }
-  
-  document.body.removeChild(textArea);
+
   return success;
+}
+
+function showManualCopyModal(text, successMsg = null, btnElement = null) {
+  const modal = document.getElementById('modal-copy-manual');
+  const input = document.getElementById('manual-copy-input');
+  if (!modal || !input) {
+    try {
+      window.prompt('คัดลอกข้อความด้านล่างนี้ (แตะค้างแล้วเลือก Copy):', text);
+    } catch (e) {
+      showToast('ไม่สามารถคัดลอกได้: ' + text, 'info');
+    }
+    return;
+  }
+
+  input.value = text;
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+
+  setTimeout(() => {
+    input.focus();
+    input.select();
+    input.setSelectionRange(0, 999999);
+  }, 60);
+
+  const btnDoCopy = document.getElementById('btn-manual-copy-action');
+  if (btnDoCopy) {
+    btnDoCopy.onclick = () => {
+      input.focus();
+      input.select();
+      input.setSelectionRange(0, 999999);
+      const copied = fallbackCopyText(input.value);
+      if (copied) {
+        showToast(successMsg || 'คัดลอกเรียบร้อยแล้ว', 'info');
+        if (btnElement) showCopySuccess(btnElement);
+        closeManualCopyModal();
+      } else {
+        showToast('กรุณากดค้างที่ข้อความ แล้วเลือก "Copy"', 'info');
+      }
+    };
+  }
+}
+
+function closeManualCopyModal() {
+  const modal = document.getElementById('modal-copy-manual');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
 }
 
 function showCopySuccess(btn) {
@@ -1090,12 +1186,13 @@ function showCopySuccess(btn) {
 }
 
 function copyToClipboard(text, btnElement = null, customMsg = null) {
-  if (!text) {
+  if (!text && text !== 0) {
     showToast('ไม่มีข้อมูลที่จะคัดลอก', 'error');
     return;
   }
 
-  const successMsg = customMsg || `คัดลอก "${text.length > 35 ? text.substring(0, 32) + '...' : text}" แล้ว`;
+  const str = String(text).trim();
+  const successMsg = customMsg || `คัดลอก "${str.length > 35 ? str.substring(0, 32) + '...' : str}" แล้ว`;
 
   const handleSuccess = () => {
     showToast(successMsg, 'info');
@@ -1105,31 +1202,33 @@ function copyToClipboard(text, btnElement = null, customMsg = null) {
   };
 
   const handleFailure = () => {
-    showToast('ไม่สามารถคัดลอกข้อมูลได้ กรุณาลองลากครอบข้อความและกด Ctrl+C', 'error');
+    showManualCopyModal(str, successMsg, btnElement);
   };
 
-  // If in Secure Context (HTTPS or localhost) and navigator.clipboard is available
-  if (window.isSecureContext && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-    navigator.clipboard.writeText(text)
-      .then(() => {
-        handleSuccess();
-      })
-      .catch((err) => {
-        console.warn('navigator.clipboard.writeText rejected, attempting fallback:', err);
-        if (fallbackCopyText(text)) {
-          handleSuccess();
-        } else {
-          handleFailure();
-        }
-      });
-  } else {
-    // In HTTP (insecure context) or older browsers: execute synchronously during user gesture!
-    if (fallbackCopyText(text)) {
+  // 1. In HTTP (non-secure context, e.g. LAN 192.168.x.x) or when navigator.clipboard is absent/restricted:
+  // Must execute synchronous execCommand immediately during user gesture!
+  if (!window.isSecureContext || !navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+    if (fallbackCopyText(str)) {
       handleSuccess();
     } else {
       handleFailure();
     }
+    return;
   }
+
+  // 2. In Secure Context (HTTPS or localhost):
+  navigator.clipboard.writeText(str)
+    .then(() => {
+      handleSuccess();
+    })
+    .catch((err) => {
+      console.warn('navigator.clipboard.writeText rejected, attempting fallback:', err);
+      if (fallbackCopyText(str)) {
+        handleSuccess();
+      } else {
+        handleFailure();
+      }
+    });
 }
 
 function escapeHtml(str) {
