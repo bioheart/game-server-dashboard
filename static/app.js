@@ -1481,6 +1481,8 @@ function setupWolEventListeners() {
         resultEl.innerHTML = '<span>กำลังเชื่อมต่อไปยัง ' + user + '@' + ip + ':' + port + '...</span>';
       }
 
+      const shutdownPassword = document.getElementById('wol-edit-shutdown-password')?.value || '';
+
       try {
         const res = await fetch('/api/wol/ssh-test', {
           method: 'POST',
@@ -1490,7 +1492,8 @@ function setupWolEventListeners() {
             ip,
             user,
             port,
-            ssh_key: sshKey
+            ssh_key: sshKey,
+            password: shutdownPassword
           })
         });
         const data = await res.json();
@@ -1547,6 +1550,7 @@ function setupWolEventListeners() {
       const shutdownUser = document.getElementById('wol-edit-shutdown-user') ? document.getElementById('wol-edit-shutdown-user').value.trim() : 'tae';
       const shutdownPort = document.getElementById('wol-edit-shutdown-port') ? parseInt(document.getElementById('wol-edit-shutdown-port').value.trim() || '22') : 22;
       const shutdownCmd = document.getElementById('wol-edit-shutdown-cmd') ? document.getElementById('wol-edit-shutdown-cmd').value.trim() : 'shutdown /s /t 0';
+      const shutdownPassword = document.getElementById('wol-edit-shutdown-password') ? document.getElementById('wol-edit-shutdown-password').value : '';
       const sshKey = document.getElementById('wol-edit-ssh-key') ? document.getElementById('wol-edit-ssh-key').value.trim() : '';
 
       try {
@@ -1565,6 +1569,7 @@ function setupWolEventListeners() {
             shutdown_user: shutdownUser,
             shutdown_port: shutdownPort,
             shutdown_cmd: shutdownCmd,
+            shutdown_password: shutdownPassword,
             ssh_key: sshKey
           })
         });
@@ -2077,6 +2082,8 @@ function openWolEditModal(deviceId = 'pc') {
   if (portEl) portEl.value = dev.shutdown_port || 22;
   const cmdEl = document.getElementById('wol-edit-shutdown-cmd');
   if (cmdEl) cmdEl.value = dev.shutdown_cmd || 'shutdown /s /t 0';
+  const pwdEl = document.getElementById('wol-edit-shutdown-password');
+  if (pwdEl) pwdEl.value = dev.shutdown_password || '';
 
   loadDeviceSshKey(dev);
 

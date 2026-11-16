@@ -1058,9 +1058,9 @@ def generate_new_ssh_keypair(comment="game-dashboard@wol"):
         pub = open(kp + ".pub", "r", encoding="utf-8").read().strip()
         return priv, pub
 
-def test_ssh_connection(target_ip, user="tae", port=22, timeout=5, custom_key=None, device_id=None):
+def test_ssh_connection(target_ip, user="tae", port=22, timeout=5, custom_key=None, device_id=None, password=None):
     """
-    Test SSH connectivity and public key authentication to target PC without shutting it down.
+    Test SSH connectivity and authentication (Key or Password) to target PC without shutting it down.
     Runs a lightweight echo command.
     """
     if not target_ip or target_ip == "-":
@@ -1075,37 +1075,48 @@ def test_ssh_connection(target_ip, user="tae", port=22, timeout=5, custom_key=No
     except (ValueError, TypeError):
         port = 22
 
-    ssh_args = [
-        "ssh",
-        "-o", "BatchMode=yes",
-        "-o", "StrictHostKeyChecking=accept-new",
-        "-o", f"ConnectTimeout={timeout}",
-        "-p", str(port),
-    ]
-
-    import tempfile
     temp_key_file = None
-    if custom_key and str(custom_key).strip():
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tf:
-            tf.write(str(custom_key).strip() + "\n")
-            temp_key_file = tf.name
-        os.chmod(temp_key_file, 0o600)
-        ssh_args.extend(["-i", temp_key_file, "-o", "IdentitiesOnly=yes"])
-    elif device_id:
-        existing_key_path = get_device_ssh_key_path(device_id)
-        if os.path.exists(existing_key_path):
-            ssh_args.extend(["-i", existing_key_path, "-o", "IdentitiesOnly=yes"])
+    if password and str(password).strip():
+        ssh_args = [
+            "sshpass", "-p", str(password).strip(),
+            "ssh",
+            "-o", "StrictHostKeyChecking=accept-new",
+            "-o", f"ConnectTimeout={timeout}",
+            "-o", "PreferredAuthentications=password,keyboard-interactive",
+            "-o", "PubkeyAuthentication=no",
+            "-p", str(port),
+        ]
+    else:
+        ssh_args = [
+            "ssh",
+            "-o", "BatchMode=yes",
+            "-o", "StrictHostKeyChecking=accept-new",
+            "-o", f"ConnectTimeout={timeout}",
+            "-p", str(port),
+        ]
+        import tempfile
+        if custom_key and str(custom_key).strip():
+            with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tf:
+                tf.write(str(custom_key).strip() + "\n")
+                temp_key_file = tf.name
+            os.chmod(temp_key_file, 0o600)
+            ssh_args.extend(["-i", temp_key_file, "-o", "IdentitiesOnly=yes"])
+        elif device_id:
+            existing_key_path = get_device_ssh_key_path(device_id)
+            if os.path.exists(existing_key_path):
+                ssh_args.extend(["-i", existing_key_path, "-o", "IdentitiesOnly=yes"])
 
     ssh_args.extend([f"{user}@{target_ip}", "echo SSH_TEST_OK"])
 
     try:
         res = subprocess.run(ssh_args, capture_output=True, text=True, timeout=timeout + 3)
         if res.returncode == 0 and "SSH_TEST_OK" in (res.stdout or ""):
-            return True, f"เชื่อมต่อ SSH ไปยัง {user}@{target_ip}:{port} สำเร็จเรียบร้อย (สิทธิ์ถูกต้อง)"
+            auth_type = "รหัสผ่าน" if (password and str(password).strip()) else "SSH Key"
+            return True, f"เชื่อมต่อ SSH ด้วย {auth_type} ไปยัง {user}@{target_ip}:{port} สำเร็จเรียบร้อย (สิทธิ์ถูกต้อง)"
 
         err_msg = (res.stderr or res.stdout or "").strip()
         if "Permission denied" in err_msg:
-            return False, f"SSH Permission denied: เครื่องเป้าหมายปฏิเสธสิทธิ์ โปรดนำ Public Key ไปวางใน authorized_keys ของ {user} บน PC"
+            return False, f"SSH Permission denied: เครื่องเป้าหมายปฏิเสธสิทธิ์ โปรดตรวจสอบรหัสผ่าน หรือนำ Public Key ไปวางใน administrators_authorized_keys บน PC"
         elif "Connection timed out" in err_msg or "No route to host" in err_msg:
             return False, f"ไม่สามารถเชื่อมต่อไปยัง {target_ip}:{port} ได้ (Connection timed out): ตรวจสอบว่าเครื่องเปิดอยู่และ Firewall อนุญาตพอร์ต {port}"
         elif "Connection refused" in err_msg:
@@ -1125,11 +1136,11 @@ def test_ssh_connection(target_ip, user="tae", port=22, timeout=5, custom_key=No
             except Exception:
                 pass
 
-def send_shutdown_command(target_ip, user="tae", cmd="shutdown /s /t 0", port=22, timeout=8, custom_key=None, device_id=None):
+def send_shutdown_command(target_ip, user="tae", cmd="shutdown /s /t 0", port=22, timeout=8, custom_key=None, device_id=None, password=None):
     """
     Send remote shutdown command to target PC via SSH (Shutdown on LAN).
     Default command for Windows is `shutdown /s /t 0`.
-    Uses BatchMode and accept-new host checking to avoid hanging.
+    Uses BatchMode or sshpass and accept-new host checking to avoid hanging.
     """
     if not target_ip or target_ip == "-":
         return False, "ไม่พบ IP Address ของเครื่องเป้าหมาย"
@@ -1147,24 +1158,34 @@ def send_shutdown_command(target_ip, user="tae", cmd="shutdown /s /t 0", port=22
     except (ValueError, TypeError):
         port = 22
 
-    ssh_args = [
-        "ssh",
-        "-o", "BatchMode=yes",
-        "-o", "StrictHostKeyChecking=accept-new",
-        "-o", f"ConnectTimeout={timeout}",
-        "-p", str(port),
-    ]
+    if password and str(password).strip():
+        ssh_args = [
+            "sshpass", "-p", str(password).strip(),
+            "ssh",
+            "-o", "StrictHostKeyChecking=accept-new",
+            "-o", f"ConnectTimeout={timeout}",
+            "-o", "PreferredAuthentications=password,keyboard-interactive",
+            "-o", "PubkeyAuthentication=no",
+            "-p", str(port),
+        ]
+    else:
+        ssh_args = [
+            "ssh",
+            "-o", "BatchMode=yes",
+            "-o", "StrictHostKeyChecking=accept-new",
+            "-o", f"ConnectTimeout={timeout}",
+            "-p", str(port),
+        ]
+        key_path = None
+        if custom_key and str(custom_key).strip():
+            key_path = save_device_ssh_key(device_id, custom_key)
+        elif device_id:
+            existing_key_path = get_device_ssh_key_path(device_id)
+            if os.path.exists(existing_key_path):
+                key_path = existing_key_path
 
-    key_path = None
-    if custom_key and str(custom_key).strip():
-        key_path = save_device_ssh_key(device_id, custom_key)
-    elif device_id:
-        existing_key_path = get_device_ssh_key_path(device_id)
-        if os.path.exists(existing_key_path):
-            key_path = existing_key_path
-
-    if key_path and os.path.exists(key_path):
-        ssh_args.extend(["-i", key_path, "-o", "IdentitiesOnly=yes"])
+        if key_path and os.path.exists(key_path):
+            ssh_args.extend(["-i", key_path, "-o", "IdentitiesOnly=yes"])
 
     ssh_args.extend([f"{user}@{target_ip}", cmd])
 
@@ -1175,7 +1196,7 @@ def send_shutdown_command(target_ip, user="tae", cmd="shutdown /s /t 0", port=22
 
         err_msg = (res.stderr or res.stdout or "").strip()
         if "Permission denied" in err_msg:
-            return False, f"SSH Permission denied: เครื่องเป้าหมายปฏิเสธการเข้าถึง โปรดนำ SSH Public Key ของเซิร์ฟเวอร์ไปวางใน authorized_keys ของ {user} บน PC"
+            return False, f"SSH Permission denied: เครื่องเป้าหมายปฏิเสธการเข้าถึง โปรดตรวจสอบรหัสผ่าน หรือนำ SSH Public Key ของเซิร์ฟเวอร์ไปวางใน administrators_authorized_keys บน PC"
         elif "Connection timed out" in err_msg or "No route to host" in err_msg:
             return False, f"ไม่สามารถเชื่อมต่อไปยัง {target_ip}:{port} ได้ (Connection timed out): ตรวจสอบว่าเครื่องเปิดอยู่และ Firewall อนุญาตพอร์ต SSH ({port})"
         elif "Connection refused" in err_msg:
@@ -1366,6 +1387,8 @@ def get_wol_devices():
             "shutdown_user": shutdown_user,
             "shutdown_cmd": shutdown_cmd,
             "shutdown_port": shutdown_port,
+            "has_shutdown_password": bool(dev.get("shutdown_password")),
+            "shutdown_password": dev.get("shutdown_password", ""),
             "has_custom_ssh_key": bool(custom_key),
             "ssh_public_key": active_pub or "",
             "is_online": is_online,
@@ -2190,8 +2213,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 return
 
             custom_key = target.get("ssh_key") or get_device_ssh_key(target.get("id"))
+            password = payload.get("shutdown_password") or target.get("shutdown_password")
             success, message = send_shutdown_command(
-                ip, user=user, cmd=cmd, port=port, custom_key=custom_key, device_id=target.get("id")
+                ip, user=user, cmd=cmd, port=port, custom_key=custom_key, device_id=target.get("id"), password=password
             )
             if success:
                 self.send_json({
@@ -2240,13 +2264,14 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 port = 22
             custom_key = payload.get("ssh_key", None)
             dev_id = payload.get("id", "").strip()
+            password = payload.get("password") or payload.get("shutdown_password")
 
             if not target_ip or target_ip == "-":
                 self.send_json({"error": "ไม่พบ IP Address ของเครื่องเป้าหมาย"}, 400)
                 return
 
             success, message = test_ssh_connection(
-                target_ip, user=user, port=port, timeout=5, custom_key=custom_key, device_id=dev_id
+                target_ip, user=user, port=port, timeout=5, custom_key=custom_key, device_id=dev_id, password=password
             )
             if success:
                 self.send_json({"success": True, "message": message})
@@ -2274,6 +2299,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             web_url = payload.get("web_url", "").strip()
             shutdown_user = payload.get("shutdown_user", "tae").strip() or "tae"
             shutdown_cmd = payload.get("shutdown_cmd", "shutdown /s /t 0").strip() or "shutdown /s /t 0"
+            shutdown_password = payload.get("shutdown_password", None)
             try:
                 shutdown_port = int(payload.get("shutdown_port", 22)) if payload.get("shutdown_port") else 22
             except Exception:
@@ -2308,6 +2334,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                             dev["ssh_key"] = ssh_key
                         else:
                             dev.pop("ssh_key", None)
+                    if shutdown_password is not None:
+                        if shutdown_password.strip():
+                            dev["shutdown_password"] = shutdown_password.strip()
+                        else:
+                            dev.pop("shutdown_password", None)
                     if web_url:
                         dev["web_url"] = web_url
                     elif "web_url" in dev and not web_url:
@@ -2331,6 +2362,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 }
                 if ssh_key:
                     new_dev["ssh_key"] = ssh_key
+                if shutdown_password and shutdown_password.strip():
+                    new_dev["shutdown_password"] = shutdown_password.strip()
                 if web_url:
                     new_dev["web_url"] = web_url
                 devices.append(new_dev)

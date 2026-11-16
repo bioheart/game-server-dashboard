@@ -601,6 +601,14 @@
           </div>
 
           <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+              <span>SSH Password (ทางเลือก: ใช้รหัสผ่านแทน Key)</span>
+              <span class="text-[10px] text-slate-500 font-normal">เว้นว่างไว้หากใช้ SSH Key</span>
+            </label>
+            <input type="password" id="wol-edit-shutdown-password" placeholder="ใส่รหัสผ่าน Windows ของบัญชีนี้ (ถ้าไม่ใช้ Key)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-rose-500 font-mono">
+          </div>
+
+          <div>
             <label class="block text-xs font-semibold text-slate-300 mb-1.5">Shutdown Command (คำสั่งปิดเครื่อง)</label>
             <input type="text" id="wol-edit-shutdown-cmd" value="shutdown /s /t 0" placeholder="shutdown /s /t 0" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2 text-sm text-white font-mono placeholder-slate-500 focus:outline-none focus:border-rose-500">
             <p class="text-[11px] text-slate-500 mt-1">Windows: <code class="text-rose-400 font-mono">shutdown /s /t 0</code> | Linux: <code class="text-rose-400 font-mono">poweroff</code> หรือ <code class="text-rose-400 font-mono">systemctl poweroff</code></p>
