@@ -17,13 +17,16 @@
     "devices": [
       {
         "id": "pc",
-        "name": "PC ของฉัน (Gaming PC)",
-        "mac": "D8-5E-D3-49-AF-47",
-        "ip": "192.168.1.107",
+        "name": "PC ของฉัน (Gaming PC) 5070",
+        "mac": "10:FF:E0:CE:71:07",
+        "ip": "192.168.1.144",
         "broadcast": "192.168.1.255",
         "port": 9,
         "description": "Windows Gaming / Main PC",
-        "web_port": 8080
+        "web_port": 8080,
+        "shutdown_user": "tae",
+        "shutdown_cmd": "shutdown /s /t 0",
+        "shutdown_port": 22
       }
     ]
   },

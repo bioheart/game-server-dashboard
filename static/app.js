@@ -1295,6 +1295,20 @@ function setupWolEventListeners() {
   const cancelWolBtn = document.getElementById('btn-cancel-wol-edit');
   if (cancelWolBtn) cancelWolBtn.addEventListener('click', closeWolEditModal);
 
+  // Copy SSH Key button inside modal
+  const copyKeyBtn = document.getElementById('btn-copy-ssh-key');
+  if (copyKeyBtn) {
+    copyKeyBtn.addEventListener('click', () => {
+      const preview = document.getElementById('wol-ssh-key-preview');
+      const keyText = preview ? (preview.dataset.fullKey || preview.textContent) : '';
+      if (keyText && !keyText.includes('กำลังโหลด') && !keyText.includes('ไม่พบ')) {
+        copyToClipboard(keyText, copyKeyBtn, 'คัดลอก SSH Public Key สำเร็จ');
+      } else {
+        showToast('ยังไม่พบ SSH Public Key บนเซิร์ฟเวอร์', 'warning');
+      }
+    });
+  }
+
   // Submit WOL edit modal form
   const formWol = document.getElementById('form-wol-edit');
   if (formWol) {
@@ -1308,6 +1322,9 @@ function setupWolEventListeners() {
       const port = document.getElementById('wol-edit-port').value.trim();
       const desc = document.getElementById('wol-edit-desc').value.trim();
       const webPort = document.getElementById('wol-edit-web-port') ? document.getElementById('wol-edit-web-port').value.trim() : '8080';
+      const shutdownUser = document.getElementById('wol-edit-shutdown-user') ? document.getElementById('wol-edit-shutdown-user').value.trim() : 'tae';
+      const shutdownPort = document.getElementById('wol-edit-shutdown-port') ? parseInt(document.getElementById('wol-edit-shutdown-port').value.trim() || '22') : 22;
+      const shutdownCmd = document.getElementById('wol-edit-shutdown-cmd') ? document.getElementById('wol-edit-shutdown-cmd').value.trim() : 'shutdown /s /t 0';
 
       try {
         const res = await fetch('/api/wol/edit', {
@@ -1321,13 +1338,16 @@ function setupWolEventListeners() {
             broadcast,
             port: port ? parseInt(port) : 9,
             description: desc,
-            web_port: webPort ? parseInt(webPort) : 8080
+            web_port: webPort ? parseInt(webPort) : 8080,
+            shutdown_user: shutdownUser,
+            shutdown_port: shutdownPort,
+            shutdown_cmd: shutdownCmd
           })
         });
 
         const data = await res.json();
         if (res.ok && data.success) {
-          showToast('บันทึกการตั้งค่า Wake-on-LAN สำเร็จ', 'success');
+          showToast('บันทึกการตั้งค่า Wake & Shutdown on LAN สำเร็จ', 'success');
           closeWolEditModal();
           if (data.devices) {
             currentWolDevices = data.devices;
@@ -1378,6 +1398,9 @@ function createWolCardHTML(dev) {
   const pingMs = (dev.ping && dev.ping.ms !== null) ? `${dev.ping.ms} ms` : null;
   const webPort = dev.web_port || 8080;
   const webUrl = dev.web_url || (dev.ip && dev.ip !== '-' ? `http://${dev.ip}:${webPort}` : null);
+  const shutdownUser = dev.shutdown_user || 'tae';
+  const shutdownPort = dev.shutdown_port || 22;
+  const shutdownCmd = dev.shutdown_cmd || 'shutdown /s /t 0';
 
   let statusBadgeHtml = '';
   let cardBorder = 'border-slate-800';
@@ -1526,21 +1549,21 @@ function createWolCardHTML(dev) {
             <span>ตรวจจับ Ping</span>
           </button>
 
-          <!-- Direct Link to Gaming PC Controller Service (:8080) -->
-          ${webUrl ? `
-            <a href="${escapeHtml(webUrl)}" target="_blank" rel="noopener noreferrer"
-              title="เปิดหน้าระบบควบคุม Gaming PC (${escapeHtml(webUrl)})"
-              class="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-2.5 min-h-[42px] rounded-xl ${isOnline ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white shadow-lg shadow-indigo-600/30 font-bold' : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60 font-semibold'} active:scale-95 text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap">
-              <svg class="w-4 h-4 ${isOnline ? 'text-cyan-200' : 'text-slate-400'} shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-              </svg>
-              <span>เปิดควบคุม PC (:8080) ↗</span>
-            </a>
-          ` : ''}
+          <!-- Shutdown on LAN Button -->
+          <button id="btn-shutdown-action-${dev.id}" onclick="confirmShutdownDevice('${dev.id}')"
+            title="ส่งคำสั่ง SSH ปิดเครื่อง (Shutdown on LAN): ssh ${escapeHtml(shutdownUser)}@${escapeHtml(ip)} &quot;${escapeHtml(shutdownCmd)}&quot;"
+            class="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-2.5 min-h-[42px] rounded-xl ${isOnline ? 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white shadow-lg shadow-rose-600/30 hover:shadow-rose-500/40 font-bold' : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60 font-semibold'} active:scale-95 text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap">
+            <svg class="w-4 h-4 ${isOnline ? 'text-rose-100' : 'text-slate-400'} shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9"/>
+            </svg>
+            <span>ปิดเครื่อง<span class="hidden sm:inline"> (Shutdown)</span></span>
+          </button>
         </div>
 
-        <div class="text-[11px] text-slate-500 flex items-center gap-1 font-mono">
-          <span>⚡ Magic Packet (UDP Broadcast Port 9 & 7)</span>
+        <div class="text-[11px] text-slate-500 flex items-center gap-2 font-mono flex-wrap">
+          <span>⚡ WoL: UDP 9/7</span>
+          <span>•</span>
+          <span>🛑 SoL: SSH (Port ${shutdownPort})</span>
         </div>
       </div>
     </div>
@@ -1652,6 +1675,115 @@ async function wakeWolDevice(deviceId = 'pc') {
   }
 }
 
+// Confirmation Popup for Shutdown on LAN (SSH)
+function confirmShutdownDevice(deviceId = 'pc') {
+  const dev = currentWolDevices.find(d => d.id === deviceId) || {
+    id: 'pc',
+    name: 'PC ของฉัน (Gaming PC)',
+    ip: '192.168.1.144',
+    shutdown_user: 'tae',
+    shutdown_cmd: 'shutdown /s /t 0',
+    shutdown_port: 22
+  };
+
+  const modal = document.getElementById('modal-confirm');
+  const title = document.getElementById('confirm-title');
+  const desc = document.getElementById('confirm-desc');
+  const btn = document.getElementById('btn-do-confirm');
+  const iconWrap = document.getElementById('confirm-icon-wrap');
+
+  const targetIp = dev.ip || '-';
+  const targetUser = dev.shutdown_user || 'tae';
+  const targetCmd = dev.shutdown_cmd || 'shutdown /s /t 0';
+  const targetPort = dev.shutdown_port || 22;
+
+  if (iconWrap) {
+    iconWrap.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-rose-500/15 text-rose-400 border border-rose-500/30';
+    iconWrap.innerHTML = `
+      <svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9"/>
+      </svg>
+    `;
+  }
+
+  title.textContent = `ยืนยันการปิดเครื่อง "${dev.name}"?`;
+  desc.innerHTML = `
+    ต้องการส่งคำสั่ง <strong>Shutdown on LAN</strong> ผ่าน SSH ไปยังเครื่อง <strong>${escapeHtml(targetUser)}@${escapeHtml(targetIp)}</strong> หรือไม่?<br>
+    <div class="mt-2.5 p-2 bg-slate-950 rounded-lg border border-slate-800 font-mono text-[11px] text-rose-300 break-all select-all">
+      ssh ${escapeHtml(targetUser)}@${escapeHtml(targetIp)}${targetPort !== 22 ? ` -p ${targetPort}` : ''} "${escapeHtml(targetCmd)}"
+    </div>
+  `;
+  btn.className = 'px-4 py-2 rounded-lg font-medium text-xs text-white transition bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 shadow-lg shadow-rose-600/30 cursor-pointer active:scale-95';
+  btn.textContent = 'ยืนยันปิดเครื่อง';
+
+  btn.onclick = () => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    shutdownWolDevice(deviceId);
+  };
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+async function shutdownWolDevice(deviceId = 'pc') {
+  const btn = document.getElementById(`btn-shutdown-action-${deviceId}`);
+  const originalHtml = btn ? btn.innerHTML : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('opacity-75');
+    btn.innerHTML = `
+      <svg class="w-4 h-4 animate-spin text-white shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+      <span>กำลังส่งคำสั่งปิดเครื่อง...</span>
+    `;
+  }
+
+  try {
+    const res = await fetch('/api/wol/shutdown', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: deviceId })
+    });
+
+    if (res.status === 401) {
+      showLoginView();
+      showToast('กรุณาเข้าสู่ระบบก่อนดำเนินการ', 'warning');
+      return;
+    }
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(data.message || 'ส่งคำสั่ง Shutdown สำเร็จแล้ว!', 'success');
+
+      // Start polling to detect when PC turns off
+      let checkCount = 0;
+      const shutdownInterval = setInterval(async () => {
+        checkCount++;
+        const target = currentWolDevices.find(d => d.id === deviceId);
+        if (checkCount > 12 || (target && !target.is_online)) {
+          clearInterval(shutdownInterval);
+          if (target && !target.is_online) {
+            showToast('เครื่องคอมพิวเตอร์ปิดเรียบร้อยแล้ว (Offline)', 'info');
+          }
+          return;
+        }
+        await fetchStatus();
+      }, 3000);
+    } else {
+      showToast(data.error || 'ไม่สามารถส่งคำสั่ง Shutdown ได้', 'error');
+    }
+  } catch (err) {
+    console.error('Error shutting down device:', err);
+    showToast('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', 'error');
+  } finally {
+    if (btn && originalHtml) {
+      btn.disabled = false;
+      btn.classList.remove('opacity-75');
+      btn.innerHTML = originalHtml;
+    }
+  }
+}
+
 async function pingWolDevice(ip, deviceId = 'pc') {
   const btn = document.getElementById(`btn-ping-action-${deviceId}`);
   if (btn) {
@@ -1715,10 +1847,39 @@ function openWolEditModal(deviceId = 'pc') {
   const webPortInput = document.getElementById('wol-edit-web-port');
   if (webPortInput) webPortInput.value = dev.web_port || 8080;
 
+  const userEl = document.getElementById('wol-edit-shutdown-user');
+  if (userEl) userEl.value = dev.shutdown_user || 'tae';
+  const portEl = document.getElementById('wol-edit-shutdown-port');
+  if (portEl) portEl.value = dev.shutdown_port || 22;
+  const cmdEl = document.getElementById('wol-edit-shutdown-cmd');
+  if (cmdEl) cmdEl.value = dev.shutdown_cmd || 'shutdown /s /t 0';
+
+  loadServerSshKey();
+
   const modal = document.getElementById('modal-wol-edit');
   if (modal) {
     modal.classList.remove('hidden');
     modal.classList.add('flex');
+  }
+}
+
+async function loadServerSshKey() {
+  const preview = document.getElementById('wol-ssh-key-preview');
+  if (!preview) return;
+  preview.textContent = 'กำลังดึง Public Key จากเซิร์ฟเวอร์...';
+  try {
+    const res = await fetch('/api/wol/ssh-key');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.public_key) {
+        preview.textContent = data.public_key;
+        preview.dataset.fullKey = data.public_key;
+        return;
+      }
+    }
+    preview.textContent = 'ไม่พบ SSH Public Key บนเซิร์ฟเวอร์';
+  } catch (err) {
+    preview.textContent = 'เกิดข้อผิดพลาดในการโหลด SSH Key';
   }
 }
 

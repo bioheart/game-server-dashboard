@@ -981,6 +981,93 @@ def send_wol_magic_packet(mac_address, broadcast_ip="192.168.1.255", port=9):
         sock.close()
     return True
 
+def send_shutdown_command(target_ip, user="tae", cmd="shutdown /s /t 0", port=22, timeout=8):
+    """
+    Send remote shutdown command to target PC via SSH (Shutdown on LAN).
+    Default command for Windows is `shutdown /s /t 0`.
+    Uses BatchMode and accept-new host checking to avoid hanging.
+    """
+    if not target_ip or target_ip == "-":
+        return False, "ไม่พบ IP Address ของเครื่องเป้าหมาย"
+
+    user = (user or "tae").strip()
+    if not re.match(r"^[a-zA-Z0-9._-]+$", user):
+        return False, f"ชื่อผู้ใช้ SSH ไม่ถูกต้อง: '{user}'"
+
+    cmd = (cmd or "shutdown /s /t 0").strip()
+    if not cmd:
+        cmd = "shutdown /s /t 0"
+
+    try:
+        port = int(port) if port else 22
+    except (ValueError, TypeError):
+        port = 22
+
+    ssh_args = [
+        "ssh",
+        "-o", "BatchMode=yes",
+        "-o", "StrictHostKeyChecking=accept-new",
+        "-o", f"ConnectTimeout={timeout}",
+        "-p", str(port),
+        f"{user}@{target_ip}",
+        cmd
+    ]
+
+    try:
+        res = subprocess.run(ssh_args, capture_output=True, text=True, timeout=timeout + 4)
+        if res.returncode == 0:
+            return True, f"ส่งคำสั่งปิดเครื่อง ({cmd}) ไปยัง {user}@{target_ip} สำเร็จ"
+
+        err_msg = (res.stderr or res.stdout or "").strip()
+        if "Permission denied" in err_msg:
+            return False, f"SSH Permission denied: เครื่องเป้าหมายปฏิเสธการเข้าถึง โปรดนำ SSH Public Key ของเซิร์ฟเวอร์ไปวางใน authorized_keys ของ {user} บน PC"
+        elif "Connection timed out" in err_msg or "No route to host" in err_msg:
+            return False, f"ไม่สามารถเชื่อมต่อไปยัง {target_ip}:{port} ได้ (Connection timed out): ตรวจสอบว่าเครื่องเปิดอยู่และ Firewall อนุญาตพอร์ต SSH ({port})"
+        elif "Connection refused" in err_msg:
+            return False, f"การเชื่อมต่อไปยัง {target_ip}:{port} ถูกปฏิเสธ (Connection refused): ตรวจสอบว่าเปิด OpenSSH Server บนเครื่อง PC หรือยัง"
+        elif "Host key verification failed" in err_msg:
+            return False, f"Host key verification failed: คีย์ของเครื่อง {target_ip} ไม่ตรงกับ known_hosts เดิม"
+        else:
+            return False, f"คำสั่ง SSH ล้มเหลว (code {res.returncode}): {err_msg or 'Unknown error'}"
+    except subprocess.TimeoutExpired:
+        return False, f"หมดเวลาเชื่อมต่อ SSH ({timeout} วินาที) ไปยัง {user}@{target_ip}:{port}"
+    except Exception as e:
+        return False, f"เกิดข้อผิดพลาดในการรันคำสั่ง SSH: {str(e)}"
+
+def get_server_ssh_public_key():
+    """Retrieve or generate the local SSH public key for easy setup on remote clients"""
+    key_paths = [
+        "/root/.ssh/id_ed25519.pub",
+        "/root/.ssh/id_rsa.pub",
+        os.path.expanduser("~/.ssh/id_ed25519.pub"),
+        os.path.expanduser("~/.ssh/id_rsa.pub")
+    ]
+    for p in key_paths:
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if content:
+                        return content
+            except Exception:
+                pass
+    # If no key exists, generate a new ed25519 keypair
+    try:
+        ssh_dir = os.path.expanduser("~/.ssh")
+        os.makedirs(ssh_dir, mode=0o700, exist_ok=True)
+        key_file = os.path.join(ssh_dir, "id_ed25519")
+        subprocess.run(
+            ["ssh-keygen", "-t", "ed25519", "-N", "", "-f", key_file, "-C", "game-dashboard@server"],
+            capture_output=True, text=True, timeout=5
+        )
+        pub_path = f"{key_file}.pub"
+        if os.path.exists(pub_path):
+            with open(pub_path, "r", encoding="utf-8") as f:
+                return f.read().strip()
+    except Exception:
+        pass
+    return None
+
 def find_ip_by_mac(target_mac, default_ip=None):
     """
     Auto-detect current IPv4 address from ARP / Neighbor cache using target MAC address.
@@ -1089,11 +1176,6 @@ def get_wol_devices():
         live_ip = find_ip_by_mac(mac, configured_ip) if mac else configured_ip
         ip = live_ip or configured_ip
 
-        # If a live IP was discovered and differs from config, keep config in sync
-        if live_ip and configured_ip != live_ip:
-            dev["ip"] = live_ip
-            config_updated = True
-
         ping_info = None
         is_online = False
         if ip:
@@ -1101,10 +1183,19 @@ def get_wol_devices():
             if ping_info and ping_info.get("status") in ("good", "fair", "high"):
                 is_online = True
 
+        # If a live IP was discovered and differs from config, keep config in sync ONLY if verified online
+        if live_ip and configured_ip != live_ip and is_online:
+            dev["ip"] = live_ip
+            config_updated = True
+
         web_port = dev.get("web_port", 8080)
         web_url = dev.get("web_url")
         if not web_url and ip and ip != "-":
             web_url = f"http://{ip}:{web_port}" if web_port else f"http://{ip}"
+
+        shutdown_user = dev.get("shutdown_user", "tae")
+        shutdown_cmd = dev.get("shutdown_cmd", "shutdown /s /t 0")
+        shutdown_port = dev.get("shutdown_port", 22)
 
         result.append({
             **dev,
@@ -1112,6 +1203,9 @@ def get_wol_devices():
             "mac_formatted": format_mac(mac),
             "web_port": web_port,
             "web_url": web_url,
+            "shutdown_user": shutdown_user,
+            "shutdown_cmd": shutdown_cmd,
+            "shutdown_port": shutdown_port,
             "is_online": is_online,
             "ping": ping_info
         })
@@ -1428,6 +1522,14 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         elif path == "/api/wol/devices":
             self.send_json({"devices": get_wol_devices()})
+            return
+
+        elif path == "/api/wol/ssh-key":
+            pub_key = get_server_ssh_public_key()
+            if pub_key:
+                self.send_json({"public_key": pub_key})
+            else:
+                self.send_json({"error": "ไม่พบ SSH Public Key บนเซิร์ฟเวอร์"}, 404)
             return
 
         elif path == "/api/security/history":
@@ -1877,6 +1979,56 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             })
             return
 
+        elif path == "/api/wol/shutdown":
+            device_id = payload.get("id", "").strip()
+            cfg = load_config()
+            wol_devices = cfg.get("wol", {}).get("devices", [])
+
+            target = None
+            if device_id:
+                for d in wol_devices:
+                    if d.get("id") == device_id:
+                        target = d
+                        break
+
+            if not target and wol_devices:
+                target = wol_devices[0]
+
+            if not target:
+                self.send_json({"error": "Device not found"}, 404)
+                return
+
+            ip = payload.get("ip") or target.get("ip")
+            mac = target.get("mac")
+            if mac and (not ip or ip == "-"):
+                live_ip = find_ip_by_mac(mac, ip)
+                if live_ip:
+                    ip = live_ip
+
+            user = payload.get("shutdown_user") or target.get("shutdown_user") or "tae"
+            cmd = payload.get("shutdown_cmd") or target.get("shutdown_cmd") or "shutdown /s /t 0"
+            try:
+                port = int(payload.get("shutdown_port") or target.get("shutdown_port") or 22)
+            except Exception:
+                port = 22
+
+            if not ip or ip == "-":
+                self.send_json({"error": "ไม่พบ IP Address ของเครื่องเป้าหมาย"}, 400)
+                return
+
+            success, message = send_shutdown_command(ip, user=user, cmd=cmd, port=port)
+            if success:
+                self.send_json({
+                    "success": True,
+                    "message": message,
+                    "target": f"{user}@{ip}:{port}",
+                    "cmd": cmd,
+                    "timestamp": time.time()
+                })
+            else:
+                self.send_json({"error": message}, 400)
+            return
+
         elif path == "/api/wol/edit":
             cfg = load_config()
             wol_cfg = cfg.setdefault("wol", {"enabled": True, "devices": []})
@@ -1895,6 +2047,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             except Exception:
                 web_port = 8080
             web_url = payload.get("web_url", "").strip()
+            shutdown_user = payload.get("shutdown_user", "tae").strip() or "tae"
+            shutdown_cmd = payload.get("shutdown_cmd", "shutdown /s /t 0").strip() or "shutdown /s /t 0"
+            try:
+                shutdown_port = int(payload.get("shutdown_port", 22)) if payload.get("shutdown_port") else 22
+            except Exception:
+                shutdown_port = 22
 
             if mac:
                 cleaned_mac = re.sub(r"[^0-9a-fA-F]", "", mac)
@@ -1913,6 +2071,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     if port: dev["port"] = int(port)
                     if description is not None: dev["description"] = description
                     dev["web_port"] = web_port
+                    dev["shutdown_user"] = shutdown_user
+                    dev["shutdown_cmd"] = shutdown_cmd
+                    dev["shutdown_port"] = shutdown_port
                     if web_url:
                         dev["web_url"] = web_url
                     elif "web_url" in dev and not web_url:
@@ -1929,7 +2090,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "broadcast": broadcast or "192.168.1.255",
                     "port": int(port) if port else 9,
                     "description": description or "Windows Gaming / Main PC",
-                    "web_port": web_port
+                    "web_port": web_port,
+                    "shutdown_user": shutdown_user,
+                    "shutdown_cmd": shutdown_cmd,
+                    "shutdown_port": shutdown_port
                 }
                 if web_url:
                     new_dev["web_url"] = web_url
