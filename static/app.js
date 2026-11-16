@@ -1301,11 +1301,233 @@ function setupWolEventListeners() {
     copyKeyBtn.addEventListener('click', () => {
       const preview = document.getElementById('wol-ssh-key-preview');
       const keyText = preview ? (preview.dataset.fullKey || preview.textContent) : '';
-      if (keyText && !keyText.includes('กำลังโหลด') && !keyText.includes('ไม่พบ')) {
+      if (keyText && !keyText.includes('กำลังโหลด') && !keyText.includes('ไม่พบ') && !keyText.includes('❌')) {
         copyToClipboard(keyText, copyKeyBtn, 'คัดลอก SSH Public Key สำเร็จ');
       } else {
-        showToast('ยังไม่พบ SSH Public Key บนเซิร์ฟเวอร์', 'warning');
+        showToast('ยังไม่พบ SSH Public Key ที่ถูกต้อง', 'warning');
       }
+    });
+  }
+
+  // Toggle Custom SSH Key Container
+  const toggleKeyBtn = document.getElementById('btn-toggle-custom-ssh-key');
+  if (toggleKeyBtn) {
+    toggleKeyBtn.addEventListener('click', () => {
+      const container = document.getElementById('wol-custom-ssh-key-container');
+      const btnText = document.getElementById('btn-toggle-custom-ssh-text');
+      if (!container) return;
+      if (container.classList.contains('hidden')) {
+        container.classList.remove('hidden');
+        if (btnText) btnText.textContent = 'ซ่อนช่อง Private Key';
+        const textarea = document.getElementById('wol-edit-ssh-key');
+        if (textarea) textarea.focus();
+      } else {
+        container.classList.add('hidden');
+        if (btnText) btnText.textContent = 'แก้ไข / วาง Key เอง';
+      }
+    });
+  }
+
+  // Reset to Default Server SSH Key
+  const resetKeyBtn = document.getElementById('btn-reset-default-ssh-key');
+  if (resetKeyBtn) {
+    resetKeyBtn.addEventListener('click', () => {
+      const textarea = document.getElementById('wol-edit-ssh-key');
+      if (textarea) textarea.value = '';
+      const container = document.getElementById('wol-custom-ssh-key-container');
+      if (container) container.classList.add('hidden');
+      const btnText = document.getElementById('btn-toggle-custom-ssh-text');
+      if (btnText) btnText.textContent = 'แก้ไข / วาง Key เอง';
+      const badge = document.getElementById('wol-ssh-key-badge');
+      if (badge) {
+        badge.textContent = 'Default';
+        badge.className = 'px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 border border-slate-700/60 font-normal';
+      }
+      const preview = document.getElementById('wol-ssh-key-preview');
+      if (preview && currentDefaultPublicKey) {
+        preview.textContent = currentDefaultPublicKey;
+        preview.dataset.fullKey = currentDefaultPublicKey;
+      }
+      showToast('เปลี่ยนกลับไปใช้ Key เริ่มต้นของระบบแล้ว (กดบันทึกเพื่อยืนยัน)', 'info');
+    });
+  }
+
+  // Generate New SSH Keypair
+  const genKeyBtn = document.getElementById('btn-generate-ssh-key');
+  if (genKeyBtn) {
+    genKeyBtn.addEventListener('click', async () => {
+      const origHtml = genKeyBtn.innerHTML;
+      genKeyBtn.disabled = true;
+      genKeyBtn.innerHTML = `
+        <svg class="w-3 h-3 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+        <span>กำลังสร้าง...</span>
+      `;
+      try {
+        const devId = document.getElementById('wol-edit-id')?.value || 'pc';
+        const res = await fetch('/api/wol/ssh-key/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: devId })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          const textarea = document.getElementById('wol-edit-ssh-key');
+          if (textarea) textarea.value = data.private_key;
+          const container = document.getElementById('wol-custom-ssh-key-container');
+          if (container) container.classList.remove('hidden');
+          const btnText = document.getElementById('btn-toggle-custom-ssh-text');
+          if (btnText) btnText.textContent = 'ซ่อนช่อง Private Key';
+          const badge = document.getElementById('wol-ssh-key-badge');
+          if (badge) {
+            badge.textContent = 'Custom (ใหม่)';
+            badge.className = 'px-1.5 py-0.5 rounded text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 font-medium';
+          }
+          const preview = document.getElementById('wol-ssh-key-preview');
+          if (preview) {
+            preview.textContent = data.public_key;
+            preview.dataset.fullKey = data.public_key;
+          }
+          showToast('สร้าง SSH Key ใหม่สำเร็จแล้ว อย่าลืมคัดลอก Public Key ไปใส่บน PC และกดบันทึก', 'success');
+        } else {
+          showToast(data.error || 'สร้าง SSH Key ไม่สำเร็จ', 'error');
+        }
+      } catch (err) {
+        showToast('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', 'error');
+      } finally {
+        genKeyBtn.disabled = false;
+        genKeyBtn.innerHTML = origHtml;
+      }
+    });
+  }
+
+  // Parse SSH Private Key on Textarea Input (Debounced)
+  const sshTextarea = document.getElementById('wol-edit-ssh-key');
+  if (sshTextarea) {
+    sshTextarea.addEventListener('input', () => {
+      clearTimeout(sshKeyParseTimeout);
+      sshKeyParseTimeout = setTimeout(async () => {
+        const val = sshTextarea.value.trim();
+        const preview = document.getElementById('wol-ssh-key-preview');
+        const badge = document.getElementById('wol-ssh-key-badge');
+        if (!val) {
+          if (preview && currentDefaultPublicKey) {
+            preview.textContent = currentDefaultPublicKey;
+            preview.dataset.fullKey = currentDefaultPublicKey;
+          }
+          if (badge) {
+            badge.textContent = 'Default';
+            badge.className = 'px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 border border-slate-700/60 font-normal';
+          }
+          return;
+        }
+        try {
+          const res = await fetch('/api/wol/ssh-key/parse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ private_key: val })
+          });
+          const data = await res.json();
+          if (res.ok && data.valid && data.public_key) {
+            if (preview) {
+              preview.textContent = data.public_key;
+              preview.dataset.fullKey = data.public_key;
+            }
+            if (badge) {
+              badge.textContent = 'Custom';
+              badge.className = 'px-1.5 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/30 font-medium';
+            }
+          } else {
+            if (preview) {
+              preview.textContent = '❌ ' + (data.error || 'รูปแบบ Private Key ไม่ถูกต้อง');
+              preview.dataset.fullKey = '';
+            }
+            if (badge) {
+              badge.textContent = 'Invalid Key';
+              badge.className = 'px-1.5 py-0.5 rounded text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/30 font-medium';
+            }
+          }
+        } catch (e) {
+          // ignore parsing error
+        }
+      }, 300);
+    });
+  }
+
+  // Test SSH Connection Button
+  const testSshBtn = document.getElementById('btn-test-ssh-connection');
+  if (testSshBtn) {
+    testSshBtn.addEventListener('click', async () => {
+      const devId = document.getElementById('wol-edit-id')?.value || 'pc';
+      const ip = document.getElementById('wol-edit-ip')?.value?.trim();
+      const user = document.getElementById('wol-edit-shutdown-user')?.value?.trim() || 'tae';
+      const port = parseInt(document.getElementById('wol-edit-shutdown-port')?.value?.trim() || '22');
+      const sshKey = document.getElementById('wol-edit-ssh-key')?.value?.trim() || '';
+      const resultEl = document.getElementById('wol-ssh-test-result');
+
+      if (!ip || ip === '-') {
+        showToast('โปรดระบุ IP Address ของเครื่องก่อนทดสอบ', 'warning');
+        return;
+      }
+
+      const origHtml = testSshBtn.innerHTML;
+      testSshBtn.disabled = true;
+      testSshBtn.innerHTML = `
+        <svg class="w-3.5 h-3.5 animate-spin text-emerald-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+        <span>กำลังทดสอบ...</span>
+      `;
+      if (resultEl) {
+        resultEl.classList.remove('hidden');
+        resultEl.className = 'text-[10px] font-medium text-slate-400 flex items-center gap-1';
+        resultEl.innerHTML = '<span>กำลังเชื่อมต่อไปยัง ' + user + '@' + ip + ':' + port + '...</span>';
+      }
+
+      try {
+        const res = await fetch('/api/wol/ssh-test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: devId,
+            ip,
+            user,
+            port,
+            ssh_key: sshKey
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(data.message || 'เชื่อมต่อ SSH สำเร็จแล้ว!', 'success');
+          if (resultEl) {
+            resultEl.className = 'text-[10px] font-semibold text-emerald-400 flex items-center gap-1';
+            resultEl.innerHTML = '<span>✅ เชื่อมต่อ SSH สำเร็จ! (พร้อมสั่งปิดเครื่อง)</span>';
+          }
+        } else {
+          showToast(data.error || 'การเชื่อมต่อ SSH ไม่สำเร็จ', 'error');
+          if (resultEl) {
+            resultEl.className = 'text-[10px] font-semibold text-rose-400 flex items-center gap-1';
+            resultEl.innerHTML = '<span>❌ ' + (data.error || 'เชื่อมต่อไม่สำเร็จ') + '</span>';
+          }
+        }
+      } catch (err) {
+        showToast('เกิดข้อผิดพลาดในการทดสอบ SSH', 'error');
+        if (resultEl) {
+          resultEl.className = 'text-[10px] font-semibold text-rose-400';
+          resultEl.textContent = '❌ ข้อผิดพลาดในการเชื่อมต่อ';
+        }
+      } finally {
+        testSshBtn.disabled = false;
+        testSshBtn.innerHTML = origHtml;
+      }
+    });
+  }
+
+  // Update .wol-display-user text dynamically
+  const shutdownUserInput = document.getElementById('wol-edit-shutdown-user');
+  if (shutdownUserInput) {
+    shutdownUserInput.addEventListener('input', () => {
+      const val = shutdownUserInput.value.trim() || 'tae';
+      document.querySelectorAll('.wol-display-user').forEach(el => {
+        el.textContent = val;
+      });
     });
   }
 
@@ -1325,6 +1547,7 @@ function setupWolEventListeners() {
       const shutdownUser = document.getElementById('wol-edit-shutdown-user') ? document.getElementById('wol-edit-shutdown-user').value.trim() : 'tae';
       const shutdownPort = document.getElementById('wol-edit-shutdown-port') ? parseInt(document.getElementById('wol-edit-shutdown-port').value.trim() || '22') : 22;
       const shutdownCmd = document.getElementById('wol-edit-shutdown-cmd') ? document.getElementById('wol-edit-shutdown-cmd').value.trim() : 'shutdown /s /t 0';
+      const sshKey = document.getElementById('wol-edit-ssh-key') ? document.getElementById('wol-edit-ssh-key').value.trim() : '';
 
       try {
         const res = await fetch('/api/wol/edit', {
@@ -1341,7 +1564,8 @@ function setupWolEventListeners() {
             web_port: webPort ? parseInt(webPort) : 8080,
             shutdown_user: shutdownUser,
             shutdown_port: shutdownPort,
-            shutdown_cmd: shutdownCmd
+            shutdown_cmd: shutdownCmd,
+            ssh_key: sshKey
           })
         });
 
@@ -1854,7 +2078,7 @@ function openWolEditModal(deviceId = 'pc') {
   const cmdEl = document.getElementById('wol-edit-shutdown-cmd');
   if (cmdEl) cmdEl.value = dev.shutdown_cmd || 'shutdown /s /t 0';
 
-  loadServerSshKey();
+  loadDeviceSshKey(dev);
 
   const modal = document.getElementById('modal-wol-edit');
   if (modal) {
@@ -1863,23 +2087,65 @@ function openWolEditModal(deviceId = 'pc') {
   }
 }
 
-async function loadServerSshKey() {
+let currentDefaultPublicKey = '';
+let sshKeyParseTimeout = null;
+
+async function loadDeviceSshKey(dev) {
   const preview = document.getElementById('wol-ssh-key-preview');
-  if (!preview) return;
-  preview.textContent = 'กำลังดึง Public Key จากเซิร์ฟเวอร์...';
+  const badge = document.getElementById('wol-ssh-key-badge');
+  const container = document.getElementById('wol-custom-ssh-key-container');
+  const textarea = document.getElementById('wol-edit-ssh-key');
+  const btnToggleText = document.getElementById('btn-toggle-custom-ssh-text');
+  const testResult = document.getElementById('wol-ssh-test-result');
+
+  if (testResult) {
+    testResult.classList.add('hidden');
+    testResult.textContent = '';
+  }
+
+  // Update all .wol-display-user text
+  const currentUsername = dev.shutdown_user || 'tae';
+  document.querySelectorAll('.wol-display-user').forEach(el => {
+    el.textContent = currentUsername;
+  });
+
+  if (preview) preview.textContent = 'กำลังดึง Public Key จากเซิร์ฟเวอร์...';
+
   try {
-    const res = await fetch('/api/wol/ssh-key');
+    const devId = dev.id || 'pc';
+    const res = await fetch(`/api/wol/ssh-key?id=${encodeURIComponent(devId)}`);
     if (res.ok) {
       const data = await res.json();
-      if (data.public_key) {
-        preview.textContent = data.public_key;
-        preview.dataset.fullKey = data.public_key;
-        return;
+      currentDefaultPublicKey = data.default_public_key || data.public_key || '';
+
+      if (data.has_custom_key && data.custom_private_key) {
+        if (container) container.classList.remove('hidden');
+        if (textarea) textarea.value = data.custom_private_key;
+        if (btnToggleText) btnToggleText.textContent = 'ซ่อนช่อง Private Key';
+        if (badge) {
+          badge.textContent = 'Custom';
+          badge.className = 'px-1.5 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/30 font-medium';
+        }
+      } else {
+        if (container) container.classList.add('hidden');
+        if (textarea) textarea.value = '';
+        if (btnToggleText) btnToggleText.textContent = 'แก้ไข / วาง Key เอง';
+        if (badge) {
+          badge.textContent = 'Default';
+          badge.className = 'px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 border border-slate-700/60 font-normal';
+        }
       }
+
+      if (preview) {
+        const keyToShow = data.public_key || currentDefaultPublicKey || 'ไม่พบ SSH Public Key บนเซิร์ฟเวอร์';
+        preview.textContent = keyToShow;
+        preview.dataset.fullKey = keyToShow;
+      }
+      return;
     }
-    preview.textContent = 'ไม่พบ SSH Public Key บนเซิร์ฟเวอร์';
+    if (preview) preview.textContent = 'ไม่พบ SSH Public Key บนเซิร์ฟเวอร์';
   } catch (err) {
-    preview.textContent = 'เกิดข้อผิดพลาดในการโหลด SSH Key';
+    if (preview) preview.textContent = 'เกิดข้อผิดพลาดในการโหลด SSH Key';
   }
 }
 

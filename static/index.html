@@ -606,22 +606,64 @@
             <p class="text-[11px] text-slate-500 mt-1">Windows: <code class="text-rose-400 font-mono">shutdown /s /t 0</code> | Linux: <code class="text-rose-400 font-mono">poweroff</code> หรือ <code class="text-rose-400 font-mono">systemctl poweroff</code></p>
           </div>
 
-          <!-- Server SSH Public Key for Easy Copy -->
-          <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 text-xs space-y-1.5">
-            <div class="flex items-center justify-between">
+          <!-- SSH Key Management Section -->
+          <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 text-xs space-y-2.5">
+            <div class="flex items-center justify-between flex-wrap gap-2">
               <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
-                <span>SSH Public Key ของเซิร์ฟเวอร์</span>
+                <span>SSH Key สำหรับปิดเครื่อง</span>
+                <span id="wol-ssh-key-badge" class="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 border border-slate-700/60 font-normal">Default</span>
               </span>
-              <button type="button" id="btn-copy-ssh-key" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white border border-slate-700/60 transition cursor-pointer">
-                คัดลอก Public Key
-              </button>
+              <div class="flex items-center gap-1.5">
+                <button type="button" id="btn-generate-ssh-key" class="text-[11px] px-2 py-0.5 rounded bg-indigo-950 hover:bg-indigo-900 active:scale-95 text-indigo-300 hover:text-indigo-200 border border-indigo-700/60 transition cursor-pointer flex items-center gap-1" title="สร้าง Keypair ใหม่โดยอัตโนมัติ">
+                  <svg class="w-3 h-3 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                  <span>สร้าง Key ใหม่</span>
+                </button>
+                <button type="button" id="btn-toggle-custom-ssh-key" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white border border-slate-700/60 transition cursor-pointer flex items-center gap-1">
+                  <svg class="w-3 h-3 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                  <span id="btn-toggle-custom-ssh-text">แก้ไข / วาง Key เอง</span>
+                </button>
+              </div>
             </div>
-            <p class="text-[11px] text-slate-400 leading-relaxed">
-              นำ Key นี้ไปใส่ใน <code class="text-amber-300 font-mono">C:\Users\tae\.ssh\authorized_keys</code> บน Windows เพื่อสั่งปิดเครื่องได้โดยไม่ต้องพิมพ์รหัสผ่าน
-            </p>
-            <div id="wol-ssh-key-preview" class="font-mono text-[10px] text-slate-500 bg-slate-900/90 rounded px-2 py-1.5 border border-slate-800 truncate select-all">
-              กำลังโหลด Public Key...
+
+            <!-- Custom Private Key Input Area (Toggled) -->
+            <div id="wol-custom-ssh-key-container" class="space-y-1.5 hidden pt-1 border-t border-slate-800/60">
+              <div class="flex items-center justify-between">
+                <label class="block text-[11px] font-semibold text-amber-400 flex items-center gap-1">
+                  <span>SSH Private Key (คีย์ลับส่วนตัว)</span>
+                </label>
+                <button type="button" id="btn-reset-default-ssh-key" class="text-[10px] text-slate-400 hover:text-rose-400 transition cursor-pointer underline">
+                  กลับไปใช้ Key เริ่มต้นของเซิร์ฟเวอร์
+                </button>
+              </div>
+              <textarea id="wol-edit-ssh-key" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...&#10;-----END OPENSSH PRIVATE KEY-----" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-[10px] text-slate-200 font-mono placeholder-slate-600 focus:outline-none focus:border-amber-500 leading-tight select-all"></textarea>
+              <p class="text-[10px] text-slate-400">
+                วาง Private Key (OpenSSH หรือ RSA) ที่นี่ หรือกด "สร้าง Key ใหม่" เพื่อให้ระบบ Gen คีย์ให้อัตโนมัติ
+              </p>
+            </div>
+
+            <!-- Public Key Box for Windows authorized_keys -->
+            <div class="space-y-1 pt-1">
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] text-slate-400 leading-relaxed">
+                  นำ Public Key ไปใส่ใน <code class="text-amber-300 font-mono">C:\Users\<span class="wol-display-user">tae</span>\.ssh\authorized_keys</code> บน Windows:
+                </p>
+                <button type="button" id="btn-copy-ssh-key" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white border border-slate-700/60 transition cursor-pointer shrink-0">
+                  คัดลอก Public Key
+                </button>
+              </div>
+              <div id="wol-ssh-key-preview" class="font-mono text-[10px] text-slate-400 bg-slate-900/90 rounded px-2.5 py-1.5 border border-slate-800/80 break-all select-all max-h-20 overflow-y-auto">
+                กำลังโหลด Public Key...
+              </div>
+            </div>
+
+            <!-- Test Connection Row -->
+            <div class="pt-2 border-t border-slate-800/60 flex items-center justify-between flex-wrap gap-2">
+              <button type="button" id="btn-test-ssh-connection" class="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 transition flex items-center gap-1.5 cursor-pointer active:scale-95">
+                <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                <span>ทดสอบเชื่อมต่อ SSH ทันที</span>
+              </button>
+              <div id="wol-ssh-test-result" class="text-[10px] font-medium hidden"></div>
             </div>
           </div>
         </div>

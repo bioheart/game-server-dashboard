@@ -981,7 +981,151 @@ def send_wol_magic_packet(mac_address, broadcast_ip="192.168.1.255", port=9):
         sock.close()
     return True
 
-def send_shutdown_command(target_ip, user="tae", cmd="shutdown /s /t 0", port=22, timeout=8):
+def get_device_ssh_key_path(device_id):
+    ensure_data_dir()
+    ssh_keys_dir = os.path.join(DATA_DIR, "ssh_keys")
+    os.makedirs(ssh_keys_dir, mode=0o700, exist_ok=True)
+    safe_id = re.sub(r"[^a-zA-Z0-9_-]", "", str(device_id or "default"))
+    return os.path.join(ssh_keys_dir, f"{safe_id}_key")
+
+def get_device_ssh_key(device_id):
+    if not device_id:
+        return None
+    key_path = get_device_ssh_key_path(device_id)
+    if os.path.exists(key_path):
+        try:
+            with open(key_path, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if content:
+                    return content
+        except Exception:
+            pass
+    return None
+
+def save_device_ssh_key(device_id, key_content):
+    if not device_id:
+        return None
+    key_path = get_device_ssh_key_path(device_id)
+    if not key_content or not str(key_content).strip():
+        if os.path.exists(key_path):
+            try:
+                os.remove(key_path)
+            except Exception:
+                pass
+        return None
+    try:
+        with open(key_path, "w", encoding="utf-8") as f:
+            f.write(str(key_content).strip() + "\n")
+        os.chmod(key_path, 0o600)
+        return key_path
+    except Exception as e:
+        print(f"[WOL] Error saving device SSH key: {e}")
+        return None
+
+def get_public_key_from_private_key(priv_key_str):
+    """Derive OpenSSH public key from private key string using ssh-keygen"""
+    if not priv_key_str or not str(priv_key_str).strip():
+        return None
+    import tempfile
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tf:
+        tf.write(str(priv_key_str).strip() + "\n")
+        tmp_name = tf.name
+    try:
+        os.chmod(tmp_name, 0o600)
+        res = subprocess.run(["ssh-keygen", "-y", "-f", tmp_name], capture_output=True, text=True, timeout=5)
+        if res.returncode == 0 and res.stdout.strip():
+            return res.stdout.strip()
+        return None
+    except Exception:
+        return None
+    finally:
+        try:
+            if os.path.exists(tmp_name):
+                os.remove(tmp_name)
+        except Exception:
+            pass
+
+def generate_new_ssh_keypair(comment="game-dashboard@wol"):
+    """Generate a new ed25519 keypair and return (private_key, public_key)"""
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        kp = os.path.join(td, "id_ed25519")
+        subprocess.run(
+            ["ssh-keygen", "-t", "ed25519", "-N", "", "-f", kp, "-C", comment],
+            capture_output=True, text=True, check=True, timeout=8
+        )
+        priv = open(kp, "r", encoding="utf-8").read().strip()
+        pub = open(kp + ".pub", "r", encoding="utf-8").read().strip()
+        return priv, pub
+
+def test_ssh_connection(target_ip, user="tae", port=22, timeout=5, custom_key=None, device_id=None):
+    """
+    Test SSH connectivity and public key authentication to target PC without shutting it down.
+    Runs a lightweight echo command.
+    """
+    if not target_ip or target_ip == "-":
+        return False, "ไม่พบ IP Address ของเครื่องเป้าหมาย"
+
+    user = (user or "tae").strip()
+    if not re.match(r"^[a-zA-Z0-9._-]+$", user):
+        return False, f"ชื่อผู้ใช้ SSH ไม่ถูกต้อง: '{user}'"
+
+    try:
+        port = int(port) if port else 22
+    except (ValueError, TypeError):
+        port = 22
+
+    ssh_args = [
+        "ssh",
+        "-o", "BatchMode=yes",
+        "-o", "StrictHostKeyChecking=accept-new",
+        "-o", f"ConnectTimeout={timeout}",
+        "-p", str(port),
+    ]
+
+    import tempfile
+    temp_key_file = None
+    if custom_key and str(custom_key).strip():
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tf:
+            tf.write(str(custom_key).strip() + "\n")
+            temp_key_file = tf.name
+        os.chmod(temp_key_file, 0o600)
+        ssh_args.extend(["-i", temp_key_file, "-o", "IdentitiesOnly=yes"])
+    elif device_id:
+        existing_key_path = get_device_ssh_key_path(device_id)
+        if os.path.exists(existing_key_path):
+            ssh_args.extend(["-i", existing_key_path, "-o", "IdentitiesOnly=yes"])
+
+    ssh_args.extend([f"{user}@{target_ip}", "echo SSH_TEST_OK"])
+
+    try:
+        res = subprocess.run(ssh_args, capture_output=True, text=True, timeout=timeout + 3)
+        if res.returncode == 0 and "SSH_TEST_OK" in (res.stdout or ""):
+            return True, f"เชื่อมต่อ SSH ไปยัง {user}@{target_ip}:{port} สำเร็จเรียบร้อย (สิทธิ์ถูกต้อง)"
+
+        err_msg = (res.stderr or res.stdout or "").strip()
+        if "Permission denied" in err_msg:
+            return False, f"SSH Permission denied: เครื่องเป้าหมายปฏิเสธสิทธิ์ โปรดนำ Public Key ไปวางใน authorized_keys ของ {user} บน PC"
+        elif "Connection timed out" in err_msg or "No route to host" in err_msg:
+            return False, f"ไม่สามารถเชื่อมต่อไปยัง {target_ip}:{port} ได้ (Connection timed out): ตรวจสอบว่าเครื่องเปิดอยู่และ Firewall อนุญาตพอร์ต {port}"
+        elif "Connection refused" in err_msg:
+            return False, f"การเชื่อมต่อไปยัง {target_ip}:{port} ถูกปฏิเสธ (Connection refused): ตรวจสอบว่า OpenSSH Server บน PC เริ่มทำงานหรือยัง"
+        elif "Host key verification failed" in err_msg:
+            return False, f"Host key verification failed: คีย์เครื่อง {target_ip} ไม่ตรงกับ known_hosts เดิม"
+        else:
+            return False, f"ทดสอบ SSH ล้มเหลว (code {res.returncode}): {err_msg or 'Unknown error'}"
+    except subprocess.TimeoutExpired:
+        return False, f"หมดเวลาเชื่อมต่อ SSH ({timeout} วินาที) ไปยัง {user}@{target_ip}:{port}"
+    except Exception as e:
+        return False, f"เกิดข้อผิดพลาดในการทดสอบ SSH: {str(e)}"
+    finally:
+        if temp_key_file and os.path.exists(temp_key_file):
+            try:
+                os.remove(temp_key_file)
+            except Exception:
+                pass
+
+def send_shutdown_command(target_ip, user="tae", cmd="shutdown /s /t 0", port=22, timeout=8, custom_key=None, device_id=None):
     """
     Send remote shutdown command to target PC via SSH (Shutdown on LAN).
     Default command for Windows is `shutdown /s /t 0`.
@@ -1009,9 +1153,20 @@ def send_shutdown_command(target_ip, user="tae", cmd="shutdown /s /t 0", port=22
         "-o", "StrictHostKeyChecking=accept-new",
         "-o", f"ConnectTimeout={timeout}",
         "-p", str(port),
-        f"{user}@{target_ip}",
-        cmd
     ]
+
+    key_path = None
+    if custom_key and str(custom_key).strip():
+        key_path = save_device_ssh_key(device_id, custom_key)
+    elif device_id:
+        existing_key_path = get_device_ssh_key_path(device_id)
+        if os.path.exists(existing_key_path):
+            key_path = existing_key_path
+
+    if key_path and os.path.exists(key_path):
+        ssh_args.extend(["-i", key_path, "-o", "IdentitiesOnly=yes"])
+
+    ssh_args.extend([f"{user}@{target_ip}", cmd])
 
     try:
         res = subprocess.run(ssh_args, capture_output=True, text=True, timeout=timeout + 4)
@@ -1197,6 +1352,11 @@ def get_wol_devices():
         shutdown_cmd = dev.get("shutdown_cmd", "shutdown /s /t 0")
         shutdown_port = dev.get("shutdown_port", 22)
 
+        dev_id = dev.get("id", "pc")
+        custom_key = dev.get("ssh_key") or get_device_ssh_key(dev_id)
+        custom_pub = get_public_key_from_private_key(custom_key) if custom_key else None
+        active_pub = custom_pub or get_server_ssh_public_key()
+
         result.append({
             **dev,
             "ip": ip,
@@ -1206,6 +1366,8 @@ def get_wol_devices():
             "shutdown_user": shutdown_user,
             "shutdown_cmd": shutdown_cmd,
             "shutdown_port": shutdown_port,
+            "has_custom_ssh_key": bool(custom_key),
+            "ssh_public_key": active_pub or "",
             "is_online": is_online,
             "ping": ping_info
         })
@@ -1525,11 +1687,22 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
 
         elif path == "/api/wol/ssh-key":
-            pub_key = get_server_ssh_public_key()
-            if pub_key:
-                self.send_json({"public_key": pub_key})
-            else:
-                self.send_json({"error": "ไม่พบ SSH Public Key บนเซิร์ฟเวอร์"}, 404)
+            parsed_url = urlparse(self.path)
+            q_params = parse_qs(parsed_url.query)
+            dev_id = q_params.get("id", [""])[0].strip()
+
+            default_pub = get_server_ssh_public_key()
+            custom_key = get_device_ssh_key(dev_id) if dev_id else None
+            custom_pub = get_public_key_from_private_key(custom_key) if custom_key else None
+            active_pub = custom_pub or default_pub
+
+            self.send_json({
+                "public_key": active_pub or "",
+                "default_public_key": default_pub or "",
+                "custom_public_key": custom_pub or "",
+                "has_custom_key": bool(custom_key),
+                "custom_private_key": custom_key or ""
+            })
             return
 
         elif path == "/api/security/history":
@@ -2016,7 +2189,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json({"error": "ไม่พบ IP Address ของเครื่องเป้าหมาย"}, 400)
                 return
 
-            success, message = send_shutdown_command(ip, user=user, cmd=cmd, port=port)
+            custom_key = target.get("ssh_key") or get_device_ssh_key(target.get("id"))
+            success, message = send_shutdown_command(
+                ip, user=user, cmd=cmd, port=port, custom_key=custom_key, device_id=target.get("id")
+            )
             if success:
                 self.send_json({
                     "success": True,
@@ -2027,6 +2203,55 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 })
             else:
                 self.send_json({"error": message}, 400)
+            return
+
+        elif path == "/api/wol/ssh-key/generate":
+            try:
+                dev_id = payload.get("id", "wol")
+                comment = payload.get("comment", f"game-dashboard@{dev_id}")
+                priv, pub = generate_new_ssh_keypair(comment)
+                self.send_json({
+                    "success": True,
+                    "private_key": priv,
+                    "public_key": pub
+                })
+            except Exception as e:
+                self.send_json({"error": f"สร้าง SSH Key ล้มเหลว: {str(e)}"}, 500)
+            return
+
+        elif path == "/api/wol/ssh-key/parse":
+            priv_key = payload.get("private_key", "").strip()
+            if not priv_key:
+                self.send_json({"valid": False, "error": "ไม่พบ Private Key"}, 400)
+                return
+            pub = get_public_key_from_private_key(priv_key)
+            if pub:
+                self.send_json({"valid": True, "public_key": pub})
+            else:
+                self.send_json({"valid": False, "error": "รูปแบบ Private Key ไม่ถูกต้อง (ต้องเป็น OpenSSH หรือ RSA format)"}, 400)
+            return
+
+        elif path == "/api/wol/ssh-test":
+            target_ip = payload.get("ip", "").strip()
+            user = payload.get("user", "tae").strip() or "tae"
+            try:
+                port = int(payload.get("port", 22)) if payload.get("port") else 22
+            except Exception:
+                port = 22
+            custom_key = payload.get("ssh_key", None)
+            dev_id = payload.get("id", "").strip()
+
+            if not target_ip or target_ip == "-":
+                self.send_json({"error": "ไม่พบ IP Address ของเครื่องเป้าหมาย"}, 400)
+                return
+
+            success, message = test_ssh_connection(
+                target_ip, user=user, port=port, timeout=5, custom_key=custom_key, device_id=dev_id
+            )
+            if success:
+                self.send_json({"success": True, "message": message})
+            else:
+                self.send_json({"success": False, "error": message}, 400)
             return
 
         elif path == "/api/wol/edit":
@@ -2053,6 +2278,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 shutdown_port = int(payload.get("shutdown_port", 22)) if payload.get("shutdown_port") else 22
             except Exception:
                 shutdown_port = 22
+            ssh_key = payload.get("ssh_key", None)
+            if ssh_key is not None:
+                ssh_key = ssh_key.strip()
+                save_device_ssh_key(dev_id, ssh_key)
 
             if mac:
                 cleaned_mac = re.sub(r"[^0-9a-fA-F]", "", mac)
@@ -2074,6 +2303,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     dev["shutdown_user"] = shutdown_user
                     dev["shutdown_cmd"] = shutdown_cmd
                     dev["shutdown_port"] = shutdown_port
+                    if ssh_key is not None:
+                        if ssh_key:
+                            dev["ssh_key"] = ssh_key
+                        else:
+                            dev.pop("ssh_key", None)
                     if web_url:
                         dev["web_url"] = web_url
                     elif "web_url" in dev and not web_url:
@@ -2095,6 +2329,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "shutdown_cmd": shutdown_cmd,
                     "shutdown_port": shutdown_port
                 }
+                if ssh_key:
+                    new_dev["ssh_key"] = ssh_key
                 if web_url:
                     new_dev["web_url"] = web_url
                 devices.append(new_dev)
