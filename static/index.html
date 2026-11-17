@@ -365,9 +365,9 @@
   </div>
 
   <!-- MODAL: Playit Details Modal -->
-  <div id="modal-playit" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-scale-in">
-      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+  <div id="modal-playit" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-scale-in flex flex-col max-h-[92vh] my-auto">
+      <div class="px-5 sm:px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/70 shrink-0">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
@@ -380,12 +380,12 @@
             <p class="text-xs text-slate-400 font-mono mt-0.5">Agent ID: <span id="playit-modal-agent" class="text-slate-300">-</span></p>
           </div>
         </div>
-        <button id="btn-close-playit" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+        <button id="btn-close-playit" type="button" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
 
-      <div class="p-6 space-y-4">
+      <div class="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
         <!-- Tunnels list -->
         <div>
           <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
@@ -424,18 +424,19 @@
   </div>
 
   <!-- MODAL: Add New Game -->
-  <div id="modal-add-game" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-scale-in">
-      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+  <div id="modal-add-game" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-scale-in flex flex-col max-h-[92vh] my-auto">
+      <div class="px-5 sm:px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/70 shrink-0">
         <h3 class="font-bold text-base text-white flex items-center gap-2">
           <span>🎮 เพิ่ม Game Server ใน Dashboard</span>
         </h3>
-        <button id="btn-close-add" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+        <button id="btn-close-add" type="button" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
       </div>
 
-      <form id="form-add-game" class="p-6 space-y-4">
+      <form id="form-add-game" class="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div class="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
         <!-- Game Name -->
         <div>
           <label class="block text-xs font-semibold text-slate-300 mb-1.5">ชื่อเกม / ชื่อ Server <span class="text-rose-400">*</span></label>
@@ -490,12 +491,14 @@
           </select>
         </div>
 
+        </div>
+
         <!-- Action buttons -->
-        <div class="pt-2 flex justify-end gap-3">
-          <button type="button" id="btn-cancel-add" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 transition">
+        <div class="px-5 sm:px-6 py-3.5 border-t border-slate-800/80 bg-slate-950/60 flex justify-end gap-3 shrink-0">
+          <button type="button" id="btn-cancel-add" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 transition cursor-pointer">
             ยกเลิก
           </button>
-          <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white transition shadow-lg shadow-indigo-600/25">
+          <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white transition shadow-lg shadow-indigo-600/25 cursor-pointer">
             บันทึกเกม
           </button>
         </div>
@@ -504,8 +507,8 @@
   </div>
 
   <!-- MODAL: Confirmation Dialog (Start/Stop/Restart) -->
-  <div id="modal-confirm" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4 animate-scale-in">
+  <div id="modal-confirm" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4 animate-scale-in my-auto">
       <div class="flex items-center gap-3">
         <div id="confirm-icon-wrap" class="w-10 h-10 rounded-full flex items-center justify-center bg-amber-500/10 text-amber-400 border border-amber-500/20">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
@@ -528,19 +531,20 @@
   </div>
 
   <!-- MODAL: Edit Wake on LAN Device -->
-  <div id="modal-wol-edit" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-scale-in">
-      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+  <div id="modal-wol-edit" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-scale-in flex flex-col max-h-[92vh] my-auto">
+      <div class="px-5 sm:px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/70 shrink-0">
         <h3 class="font-bold text-base text-white flex items-center gap-2">
           <span>⚡ ตั้งค่า Wake & Shutdown on LAN (PC)</span>
         </h3>
-        <button id="btn-close-wol-modal" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+        <button id="btn-close-wol-modal" type="button" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
       </div>
 
-      <form id="form-wol-edit" class="p-6 space-y-4">
-        <input type="hidden" id="wol-edit-id" value="pc">
+      <form id="form-wol-edit" class="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div class="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
+          <input type="hidden" id="wol-edit-id" value="pc">
 
         <!-- Device Name -->
         <div>
@@ -684,17 +688,18 @@
           </div>
           <input type="number" id="wol-edit-web-port" value="8080" placeholder="8080" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2 text-sm text-white font-mono placeholder-slate-500 focus:outline-none focus:border-amber-500">
         </div>
+      </div>
 
-        <!-- Buttons -->
-        <div class="pt-2 flex justify-end gap-3">
-          <button type="button" id="btn-cancel-wol-edit" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 transition">
-            ยกเลิก
-          </button>
-          <button type="submit" class="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-medium text-white transition shadow-lg shadow-amber-600/25">
-            บันทึกการตั้งค่า
-          </button>
-        </div>
-      </form>
+      <!-- Sticky Footer Actions -->
+      <div class="px-5 sm:px-6 py-3.5 border-t border-slate-800/80 bg-slate-950/60 flex justify-end gap-3 shrink-0">
+        <button type="button" id="btn-cancel-wol-edit" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 transition cursor-pointer">
+          ยกเลิก
+        </button>
+        <button type="submit" class="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-medium text-white transition shadow-lg shadow-amber-600/25 cursor-pointer">
+          บันทึกการตั้งค่า
+        </button>
+      </div>
+    </form>
     </div>
   </div>
 
